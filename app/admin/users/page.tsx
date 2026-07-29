@@ -1,5 +1,4 @@
-﻿```tsx
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assignUserRole } from "@/app/admin/users/actions";
@@ -72,11 +71,11 @@ export default async function AdminUsersPage({
       .maybeSingle();
 
   if (currentProfileError) {
-    redirect(
-      `/dashboard?error=${encodeURIComponent(
-        currentProfileError.message,
-      )}`,
+    const errorMessage = encodeURIComponent(
+      currentProfileError.message,
     );
+
+    redirect("/dashboard?error=" + errorMessage);
   }
 
   if (currentProfile?.role !== "super_admin") {
@@ -123,6 +122,13 @@ export default async function AdminUsersPage({
               className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
             >
               Task Management
+            </Link>
+
+            <Link
+              href="/admin/tasks/new"
+              className="w-fit rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950 transition hover:bg-emerald-400"
+            >
+              New Task
             </Link>
           </div>
         </header>
@@ -240,12 +246,12 @@ export default async function AdminUsersPage({
                               }
                               className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
                             >
-                              {roles.map((role) => (
+                              {roles.map((roleOption) => (
                                 <option
-                                  key={role.value}
-                                  value={role.value}
+                                  key={roleOption.value}
+                                  value={roleOption.value}
                                 >
-                                  {role.label}
+                                  {roleOption.label}
                                 </option>
                               ))}
                             </select>
@@ -270,4 +276,3 @@ export default async function AdminUsersPage({
     </main>
   );
 }
-```
