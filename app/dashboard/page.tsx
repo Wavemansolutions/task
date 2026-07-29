@@ -1,16 +1,31 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { signOut } from "@/app/auth/actions";
 
-const adminRoles = [
-  "super_admin",
-  "task_manager",
-  "proof_reviewer",
-  "finance_admin",
-  "support_admin",
-  "auditor",
-];
+type WorkerTaskSummary = {
+  status: string;
+  task_id: string;
+  tasks:
+    | {
+        title: string | null;
+        reward_amount: number | string | null;
+      }
+    | {
+        title: string | null;
+        reward_amount: number | string | null;
+      }[]
+    | null;
+};
+
+function getRelatedTask(
+  relation: WorkerTaskSummary["tasks"],
+) {
+  if (Array.isArray(relation)) {
+    return relation[0] ?? null;
+  }
+
+  return relation;
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -20,216 +35,210 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?error=Please+sign+in+to+continue.");
+    redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role, trust_score")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [
+    { data: profile },
+    { count: availableTaskCount },
+    { data: workerTasksData },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name,role")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("tasks")
+      .select("id", {
+        count: "exact",
+        head: true,
+      })
+      .eq("status", "active")
+      .gt("slots_available", 0),
+    supabase
+      .from("worker_tasks")
+      .select(
+        "status,task_id,tasks(title,reward_amount)",
+      )
+      .eq("worker_id", user.id)
+      .order("started_at", { ascending: false })
+      .limit(8),
+  ]);
 
-  const { data: wallet } = await supabase
-    .from("wallets")
-    .select("available_balance, pending_balance")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const workerTasks =
+    (workerTasksData ?? []) as WorkerTaskSummary[];
 
-  const isAdmin = Boolean(
-    profile?.role &&
-      adminRoles.includes(profile.role),
+  const startedCount = workerTasks.filter(
+    (item) => item.status === "started",
+  ).length;
+
+  const submittedCount = workerTasks.filter(
+    (item) => item.status === "submitted",
+  ).length;
+
+  const approvedTasks = workerTasks.filter(
+    (item) => item.status === "approved",
   );
 
-  const formattedRole = profile?.role
-    ? profile.role
-        .replaceAll("_", " ")
-        .replace(
-          /\b\w/g,
-          (letter: string) => letter.toUpperCase(),
-        )
-    : "Worker";
+  const approvedEarnings = approvedTasks.reduce(
+    (total, item) => {
+      const task = getRelatedTask(item.tasks);
+
+      return (
+        total +
+        Number(task?.reward_amount ?? 0)
+      );
+    },
+    0,
+  );
+
+  const displayName =
+    profile?.full_name ||
+    user.email?.split("@")[0] ||
+    "Worker";
+
+  const isAdmin = [
+    "super_admin",
+    "task_manager",
+    "proof_reviewer",
+    "finance_admin",
+    "support_admin",
+    "auditor",
+  ].includes(profile?.role ?? "");
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold tracking-wider text-emerald-400">
+            <p className="text-sm font-bold tracking-wider text-emerald-400">
               WAVEMAN TASKS
             </p>
 
             <h1 className="mt-2 text-3xl font-bold">
-              Welcome,{" "}
-              {profile?.full_name ??
-                user.email ??
-                "User"}
+              Welcome, {displayName}
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Manage your tasks, submissions, and earnings.
-            </p>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Account role:{" "}
-              <span className="font-semibold text-emerald-400">
-                {formattedRole}
-              </span>
+              Track your tasks and earnings.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <Link
+              href="/tasks"
+              className="rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950 hover:bg-emerald-400"
+            >
+              Browse Tasks
+            </Link>
+
             {isAdmin ? (
               <Link
                 href="/admin"
-                className="rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
+                className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium hover:bg-white/10"
               >
                 Admin Dashboard
               </Link>
             ) : null}
-
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
-              >
-                Sign out
-              </button>
-            </form>
           </div>
         </header>
 
-        <section className="grid gap-5 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <section className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-slate-400">
-              Available balance
+              Approved Earnings
             </p>
-
-            <p className="mt-3 text-3xl font-bold">
-              ₦
-              {Number(
-                wallet?.available_balance ?? 0,
-              ).toLocaleString("en-NG")}
+            <p className="mt-2 text-3xl font-bold text-emerald-400">
+              ₦{approvedEarnings.toLocaleString("en-NG")}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-slate-400">
-              Pending balance
+              Available Tasks
             </p>
-
-            <p className="mt-3 text-3xl font-bold">
-              ₦
-              {Number(
-                wallet?.pending_balance ?? 0,
-              ).toLocaleString("en-NG")}
+            <p className="mt-2 text-3xl font-bold">
+              {availableTaskCount ?? 0}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-slate-400">
-              Trust score
+              Tasks In Progress
             </p>
+            <p className="mt-2 text-3xl font-bold">
+              {startedCount}
+            </p>
+          </div>
 
-            <p className="mt-3 text-3xl font-bold">
-              {profile?.trust_score ?? 100}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-slate-400">
+              Pending Review
+            </p>
+            <p className="mt-2 text-3xl font-bold">
+              {submittedCount}
             </p>
           </div>
         </section>
 
-        <section className="mt-8 grid gap-5 md:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-2xl">
-              📋
+        <section className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold">
+                Recent Tasks
+              </h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Your latest reserved and completed work.
+              </p>
             </div>
-
-            <h2 className="mt-5 text-xl font-bold">
-              Available Tasks
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Browse active tasks, follow the instructions,
-              and submit valid proof.
-            </p>
 
             <Link
               href="/tasks"
-              className="mt-6 inline-flex rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
+              className="text-sm font-semibold text-emerald-400 hover:text-emerald-300"
             >
-              Browse Tasks
+              Find more tasks
             </Link>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-2xl">
-              📝
+          {workerTasks.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-slate-400">
+                You have not started any task yet.
+              </p>
             </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {workerTasks.map((item) => {
+                const task = getRelatedTask(item.tasks);
 
-            <h2 className="mt-5 text-xl font-bold">
-              My Tasks
-            </h2>
+                return (
+                  <Link
+                    key={item.task_id}
+                    href={"/tasks/" + item.task_id}
+                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-900/60 p-4 transition hover:bg-slate-900 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {task?.title ?? "Task"}
+                      </p>
+                      <p className="mt-1 text-sm capitalize text-slate-400">
+                        {item.status}
+                      </p>
+                    </div>
 
-            <p className="mt-2 text-slate-400">
-              View tasks you accepted, completed, or submitted
-              for review.
-            </p>
-
-            <Link
-              href="/my-tasks"
-              className="mt-6 inline-flex rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-semibold transition hover:bg-white/10"
-            >
-              View My Tasks
-            </Link>
-          </div>
+                    <p className="font-bold text-emerald-400">
+                      ₦
+                      {Number(
+                        task?.reward_amount ?? 0,
+                      ).toLocaleString("en-NG")}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </section>
-
-        {isAdmin ? (
-          <section className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-bold">
-                  Administration Access
-                </h2>
-
-                <p className="mt-2 text-slate-400">
-                  Your role gives you access to administrator
-                  tools.
-                </p>
-              </div>
-
-              <Link
-                href="/admin"
-                className="w-fit rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
-              >
-                Open Admin Dashboard
-              </Link>
-            </div>
-
-            {profile?.role === "super_admin" ? (
-              <div className="mt-6 flex flex-wrap gap-3 border-t border-white/10 pt-6">
-                <Link
-                  href="/admin/tasks/new"
-                  className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
-                >
-                  Create New Task
-                </Link>
-
-                <Link
-                  href="/admin/tasks"
-                  className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
-                >
-                  Manage Tasks
-                </Link>
-
-                <Link
-                  href="/admin/users"
-                  className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
-                >
-                  Manage Users and Roles
-                </Link>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
       </div>
     </main>
   );

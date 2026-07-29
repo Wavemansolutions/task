@@ -1,53 +1,35 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-type TaskRecord = {
-  id: string;
-  title?: string | null;
-  name?: string | null;
-  description?: string | null;
-  instructions?: string | null;
-  task_type?: string | null;
-  type?: string | null;
-  platform?: string | null;
-  reward_amount?: number | string | null;
-  reward?: number | string | null;
-  amount?: number | string | null;
-  status?: string | null;
-  total_slots?: number | null;
-  slots_available?: number | null;
-  remaining_slots?: number | null;
-  created_at?: string | null;
+type TasksPageProps = {
+  searchParams: Promise<{
+    error?: string;
+    message?: string;
+  }>;
 };
 
-function formatTaskType(value?: string | null) {
-  if (!value) return "General task";
+type TaskRecord = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  platform: string | null;
+  type: string | null;
+  reward_amount: number | string | null;
+  total_slots: number | null;
+  slots_available: number | null;
+  status: string | null;
+};
 
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
+type WorkerTaskRecord = {
+  task_id: string;
+  status: string;
+};
 
-function getTaskReward(task: TaskRecord) {
-  return Number(
-    task.reward_amount ??
-      task.reward ??
-      task.amount ??
-      0,
-  );
-}
-
-function getRemainingSlots(task: TaskRecord) {
-  return (
-    task.slots_available ??
-    task.remaining_slots ??
-    task.total_slots ??
-    null
-  );
-}
-
-export default async function TasksPage() {
+export default async function TasksPage({
+  searchParams,
+}: TasksPageProps) {
+  const query = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -55,163 +37,143 @@ export default async function TasksPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?error=Please+sign+in+to+browse+tasks.");
+    redirect(
+      "/login?error=" +
+        encodeURIComponent(
+          "Please sign in to view available tasks.",
+        ),
+    );
   }
 
-const { data, error } = await supabase
-  .from("tasks")
-  .select("*")
-  .eq("status", "active")
-  .order("created_at", { ascending: false });
+  const [
+    { data: tasksData, error: tasksError },
+    { data: workerTasksData },
+  ] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select(
+        "id,title,description,platform,type,reward_amount,total_slots,slots_available,status",
+      )
+      .eq("status", "active")
+      .gt("slots_available", 0)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("worker_tasks")
+      .select("task_id,status")
+      .eq("worker_id", user.id),
+  ]);
 
-  const tasks = (data ?? []) as TaskRecord[];
+  const tasks = (tasksData ?? []) as TaskRecord[];
+  const workerTasks =
+    (workerTasksData ?? []) as WorkerTaskRecord[];
+
+  const startedTaskIds = new Set(
+    workerTasks.map((item) => item.task_id),
+  );
+
+  const availableTasks = tasks.filter(
+    (task) => !startedTaskIds.has(task.id),
+  );
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold tracking-wider text-emerald-400">
+            <p className="text-sm font-bold tracking-wider text-emerald-400">
               WAVEMAN TASKS
             </p>
 
             <h1 className="mt-2 text-3xl font-bold">
-              Browse Tasks
+              Available Tasks
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Choose an available task, follow its instructions,
+              Choose a task, follow its instructions,
               and submit valid proof.
             </p>
           </div>
 
           <Link
             href="/dashboard"
-            className="inline-flex w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
+            className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium hover:bg-white/10"
           >
-            Back to dashboard
+            Worker Dashboard
           </Link>
         </header>
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-slate-400">
-              Available tasks
-            </p>
-
-            <p className="mt-2 text-3xl font-bold">
-              {tasks.length}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-slate-400">
-              Daily task limit
-            </p>
-
-            <p className="mt-2 text-3xl font-bold">
-              20
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-slate-400">
-              Account
-            </p>
-
-            <p className="mt-2 truncate text-lg font-semibold">
-              {user.email}
-            </p>
-          </div>
-        </section>
-
-        {error ? (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
-            <p className="font-semibold">
-              Tasks could not be loaded
-            </p>
-
-            <p className="mt-2 text-sm">
-              {error.message}
-            </p>
+        {query.message ? (
+          <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-200">
+            {query.message}
           </div>
         ) : null}
 
-        {!error && tasks.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-6 py-16 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-3xl">
-              📋
-            </div>
+        {query.error || tasksError ? (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+            {query.error ?? tasksError?.message}
+          </div>
+        ) : null}
 
-            <h2 className="mt-5 text-xl font-bold">
-              No active tasks yet
+        {availableTasks.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-16 text-center">
+            <h2 className="text-xl font-bold">
+              No new tasks available
             </h2>
 
-            <p className="mx-auto mt-2 max-w-md text-slate-400">
-              The page is working correctly. Active tasks created
-              by an administrator will appear here.
+            <p className="mt-2 text-slate-400">
+              Check again when administrators publish more
+              worker tasks.
             </p>
           </div>
-        ) : null}
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {availableTasks.map((task) => (
+              <article
+                key={task.id}
+                className="flex flex-col rounded-3xl border border-white/10 bg-white/5 p-6"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold capitalize text-slate-300">
+                    {task.platform ?? "general"}
+                  </span>
 
-        {!error && tasks.length > 0 ? (
-          <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {tasks.map((task) => {
-              const reward = getTaskReward(task);
-              const slots = getRemainingSlots(task);
+                  <span className="text-lg font-bold text-emerald-400">
+                    ₦
+                    {Number(
+                      task.reward_amount ?? 0,
+                    ).toLocaleString("en-NG")}
+                  </span>
+                </div>
 
-              return (
-                <article
-                  key={task.id}
-                  className="flex flex-col rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:-translate-y-1 hover:border-emerald-500/40"
+                <h2 className="mt-5 text-xl font-bold">
+                  {task.title ?? "Untitled task"}
+                </h2>
+
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-400">
+                  {task.description ??
+                    "Open this task to view its instructions."}
+                </p>
+
+                <div className="mt-5 flex items-center justify-between text-sm text-slate-400">
+                  <span className="capitalize">
+                    {task.type ?? "general"} task
+                  </span>
+
+                  <span>
+                    {task.slots_available ?? 0} slots left
+                  </span>
+                </div>
+
+                <Link
+                  href={"/tasks/" + task.id}
+                  className="mt-6 block rounded-xl bg-emerald-500 px-5 py-3 text-center font-bold text-slate-950 hover:bg-emerald-400"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                      {formatTaskType(
-                        task.task_type ??
-                          task.type ??
-                          task.platform,
-                      )}
-                    </span>
-
-                    <span className="text-lg font-bold text-emerald-400">
-                      ₦{reward.toLocaleString("en-NG")}
-                    </span>
-                  </div>
-
-                  <h2 className="mt-5 text-xl font-bold">
-                    {task.title ??
-                      task.name ??
-                      "Untitled task"}
-                  </h2>
-
-                  <p className="mt-3 line-clamp-3 flex-1 text-sm leading-6 text-slate-400">
-                    {task.description ??
-                      task.instructions ??
-                      "Open this task to see its full instructions."}
-                  </p>
-
-                  <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-5">
-                    <p className="text-sm text-slate-400">
-                      {slots === null
-                        ? "Available"
-                        : `${slots} slot${
-                            slots === 1 ? "" : "s"
-                          } left`}
-                    </p>
-
-                    <Link
-                      href={`/tasks/${task.id}`}
-                      className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-                    >
-                      View task
-                    </Link>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        ) : null}
+                  View Task
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
