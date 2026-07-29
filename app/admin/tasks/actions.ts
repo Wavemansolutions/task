@@ -1,5 +1,4 @@
-﻿```ts
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -138,21 +137,19 @@ export async function createTask(formData: FormData) {
     instructions,
     platform,
 
-    // Required by your original tasks table.
     type: taskType,
-
-    // Used by the newer application structure.
     task_type: taskType,
 
     task_url: taskUrl || null,
     proof_instructions: proofInstructions || null,
+
     reward_amount: rewardAmount,
     total_slots: totalSlots,
     slots_available: totalSlots,
+
     status,
     created_by: user.id,
 
-    // Campaign is optional.
     campaign_id: null,
   };
 
@@ -161,10 +158,12 @@ export async function createTask(formData: FormData) {
     .insert(taskData);
 
   if (error) {
+    const errorMessage = encodeURIComponent(
+      error.message,
+    );
+
     redirect(
-      `/admin/tasks/new?error=${encodeURIComponent(
-        error.message,
-      )}`,
+      "/admin/tasks/new?error=" + errorMessage,
     );
   }
 
@@ -177,4 +176,3 @@ export async function createTask(formData: FormData) {
     "/admin/tasks?message=Task+created+successfully.",
   );
 }
-```
