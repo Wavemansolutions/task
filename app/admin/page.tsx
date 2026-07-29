@@ -23,7 +23,7 @@ const adminRoles: AdminRole[] = [
 function formatRole(role: string) {
   return role
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/\b\w/g, (letter: string) => letter.toUpperCase());
 }
 
 export default async function AdminDashboardPage() {

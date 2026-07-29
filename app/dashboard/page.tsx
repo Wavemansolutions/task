@@ -35,15 +35,17 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const isAdmin =
+  const isAdmin = Boolean(
     profile?.role &&
-    adminRoles.includes(profile.role);
+      adminRoles.includes(profile.role),
+  );
 
   const formattedRole = profile?.role
     ? profile.role
         .replaceAll("_", " ")
-        .replace(/\b\w/g, (letter) =>
-          letter.toUpperCase(),
+        .replace(
+          /\b\w/g,
+          (letter: string) => letter.toUpperCase(),
         )
     : "Worker";
 
