@@ -1,4 +1,5 @@
-﻿"use server";
+﻿```ts
+"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -7,6 +8,24 @@ import { createClient } from "@/lib/supabase/server";
 const allowedAdminRoles = [
   "super_admin",
   "task_manager",
+];
+
+const allowedStatuses = [
+  "draft",
+  "active",
+  "paused",
+];
+
+const allowedTaskTypes = [
+  "follow",
+  "like",
+  "comment",
+  "share",
+  "subscribe",
+  "join",
+  "visit",
+  "review",
+  "general",
 ];
 
 export async function createTask(formData: FormData) {
@@ -25,7 +44,7 @@ export async function createTask(formData: FormData) {
       .from("profiles")
       .select("role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
   if (
     profileError ||
@@ -101,35 +120,45 @@ export async function createTask(formData: FormData) {
     );
   }
 
-  const allowedStatuses = [
-    "draft",
-    "active",
-    "paused",
-  ];
-
   if (!allowedStatuses.includes(status)) {
     redirect(
       "/admin/tasks/new?error=Invalid+task+status.",
     );
   }
 
+  if (!allowedTaskTypes.includes(taskType)) {
+    redirect(
+      "/admin/tasks/new?error=Invalid+task+type.",
+    );
+  }
+
+  const taskData = {
+    title,
+    description,
+    instructions,
+    platform,
+
+    // Required by your original tasks table.
+    type: taskType,
+
+    // Used by the newer application structure.
+    task_type: taskType,
+
+    task_url: taskUrl || null,
+    proof_instructions: proofInstructions || null,
+    reward_amount: rewardAmount,
+    total_slots: totalSlots,
+    slots_available: totalSlots,
+    status,
+    created_by: user.id,
+
+    // Campaign is optional.
+    campaign_id: null,
+  };
+
   const { error } = await supabase
     .from("tasks")
-    .insert({
-      title,
-      description,
-      instructions,
-      platform,
-      task_type: taskType,
-      task_url: taskUrl || null,
-      proof_instructions:
-        proofInstructions || null,
-      reward_amount: rewardAmount,
-      total_slots: totalSlots,
-      slots_available: totalSlots,
-      status,
-      created_by: user.id,
-    });
+    .insert(taskData);
 
   if (error) {
     redirect(
@@ -140,9 +169,12 @@ export async function createTask(formData: FormData) {
   }
 
   revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
   revalidatePath("/admin/tasks");
 
   redirect(
     "/admin/tasks?message=Task+created+successfully.",
   );
 }
+```

@@ -1,4 +1,5 @@
-﻿import Link from "next/link";
+﻿```tsx
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assignUserRole } from "@/app/admin/users/actions";
@@ -15,7 +16,6 @@ type ProfileRecord = {
   full_name: string | null;
   phone: string | null;
   role: string | null;
-  account_status: string | null;
   created_at: string | null;
 };
 
@@ -64,11 +64,20 @@ export default async function AdminUsersPage({
     redirect("/login");
   }
 
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { data: currentProfile, error: currentProfileError } =
+    await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+  if (currentProfileError) {
+    redirect(
+      `/dashboard?error=${encodeURIComponent(
+        currentProfileError.message,
+      )}`,
+    );
+  }
 
   if (currentProfile?.role !== "super_admin") {
     redirect(
@@ -78,9 +87,7 @@ export default async function AdminUsersPage({
 
   const { data, error } = await supabase
     .from("profiles")
-    .select(
-      "id,full_name,phone,role,account_status,created_at",
-    )
+    .select("id,full_name,phone,role,created_at")
     .order("created_at", { ascending: false });
 
   const profiles = (data ?? []) as ProfileRecord[];
@@ -103,12 +110,21 @@ export default async function AdminUsersPage({
             </p>
           </div>
 
-          <Link
-            href="/admin/tasks"
-            className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium hover:bg-white/10"
-          >
-            Task management
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admin"
+              className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
+            >
+              Admin Dashboard
+            </Link>
+
+            <Link
+              href="/admin/tasks"
+              className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium transition hover:bg-white/10"
+            >
+              Task Management
+            </Link>
+          </div>
         </header>
 
         {params.message ? (
@@ -130,7 +146,7 @@ export default async function AdminUsersPage({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left">
+              <table className="w-full min-w-[780px] text-left">
                 <thead className="bg-white/5 text-sm text-slate-400">
                   <tr>
                     <th className="px-6 py-4">
@@ -142,91 +158,109 @@ export default async function AdminUsersPage({
                     </th>
 
                     <th className="px-6 py-4">
-                      Current role
+                      Current Role
                     </th>
 
                     <th className="px-6 py-4">
-                      Status
+                      Joined
                     </th>
 
                     <th className="px-6 py-4">
-                      Assign role
+                      Assign Role
                     </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {profiles.map((profile) => (
-                    <tr
-                      key={profile.id}
-                      className="border-t border-white/10"
-                    >
-                      <td className="px-6 py-4">
-                        <p className="font-semibold">
-                          {profile.full_name ??
-                            "Unnamed user"}
-                        </p>
+                  {profiles.map((profile) => {
+                    const isCurrentUser =
+                      profile.id === user.id;
 
-                        <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
-                          {profile.id}
-                        </p>
-                      </td>
+                    return (
+                      <tr
+                        key={profile.id}
+                        className="border-t border-white/10"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold">
+                              {profile.full_name ??
+                                "Unnamed user"}
+                            </p>
 
-                      <td className="px-6 py-4 text-slate-300">
-                        {profile.phone ?? "—"}
-                      </td>
+                            {isCurrentUser ? (
+                              <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-300">
+                                You
+                              </span>
+                            ) : null}
+                          </div>
 
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold capitalize">
-                          {(
-                            profile.role ?? "worker"
-                          ).replaceAll("_", " ")}
-                        </span>
-                      </td>
+                          <p className="mt-1 max-w-[240px] truncate text-xs text-slate-500">
+                            {profile.id}
+                          </p>
+                        </td>
 
-                      <td className="px-6 py-4 capitalize text-slate-300">
-                        {profile.account_status ??
-                          "active"}
-                      </td>
+                        <td className="px-6 py-4 text-slate-300">
+                          {profile.phone ?? "—"}
+                        </td>
 
-                      <td className="px-6 py-4">
-                        <form
-                          action={assignUserRole}
-                          className="flex items-center gap-2"
-                        >
-                          <input
-                            type="hidden"
-                            name="userId"
-                            value={profile.id}
-                          />
-
-                          <select
-                            name="role"
-                            defaultValue={
+                        <td className="px-6 py-4">
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold capitalize">
+                            {(
                               profile.role ?? "worker"
-                            }
-                            className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                          >
-                            {roles.map((role) => (
-                              <option
-                                key={role.value}
-                                value={role.value}
-                              >
-                                {role.label}
-                              </option>
-                            ))}
-                          </select>
+                            ).replaceAll("_", " ")}
+                          </span>
+                        </td>
 
-                          <button
-                            type="submit"
-                            className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400"
+                        <td className="px-6 py-4 text-slate-400">
+                          {profile.created_at
+                            ? new Date(
+                                profile.created_at,
+                              ).toLocaleDateString(
+                                "en-US",
+                              )
+                            : "—"}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <form
+                            action={assignUserRole}
+                            className="flex items-center gap-2"
                           >
-                            Save
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
+                            <input
+                              type="hidden"
+                              name="userId"
+                              value={profile.id}
+                            />
+
+                            <select
+                              name="role"
+                              defaultValue={
+                                profile.role ?? "worker"
+                              }
+                              className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                            >
+                              {roles.map((role) => (
+                                <option
+                                  key={role.value}
+                                  value={role.value}
+                                >
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="submit"
+                              className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-emerald-400"
+                            >
+                              Save
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -236,3 +270,4 @@ export default async function AdminUsersPage({
     </main>
   );
 }
+```
