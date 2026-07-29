@@ -1,6 +1,7 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import DeleteTaskButton from "./components/DeleteTaskButton";
 
 type AdminTasksPageProps = {
   searchParams: Promise<{
@@ -63,7 +64,7 @@ export default async function AdminTasksPage({
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-bold tracking-wider text-emerald-400">
@@ -108,7 +109,7 @@ export default async function AdminTasksPage({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left">
+              <table className="w-full min-w-[980px] text-left">
                 <thead className="bg-white/5 text-sm text-slate-400">
                   <tr>
                     <th className="px-6 py-4">Task</th>
@@ -117,6 +118,7 @@ export default async function AdminTasksPage({
                     <th className="px-6 py-4">Slots</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Created</th>
+                    <th className="px-6 py-4">Actions</th>
                   </tr>
                 </thead>
 
@@ -158,6 +160,28 @@ export default async function AdminTasksPage({
                               task.created_at,
                             ).toLocaleDateString()
                           : "—"}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={
+                              "/admin/tasks/" +
+                              task.id +
+                              "/edit"
+                            }
+                            className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-200 hover:bg-blue-500/20"
+                          >
+                            Edit
+                          </Link>
+
+                          <DeleteTaskButton
+                            taskId={task.id}
+                            taskTitle={
+                              task.title ?? "this task"
+                            }
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
