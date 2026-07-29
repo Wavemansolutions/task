@@ -58,11 +58,11 @@ export default async function TasksPage() {
     redirect("/login?error=Please+sign+in+to+browse+tasks.");
   }
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("status", "active")
-    .order("created_at", { ascending: false });
+const { data, error } = await supabase
+  .from("tasks")
+  .select("*")
+  .eq("status", "active")
+  .order("created_at", { ascending: false });
 
   const tasks = (data ?? []) as TaskRecord[];
 
