@@ -13,21 +13,6 @@ type TaskDetailsPageProps = {
   }>;
 };
 
-type TaskRecord = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  instructions: string | null;
-  platform: string | null;
-  type: string | null;
-  task_url: string | null;
-  reward_amount: number | string | null;
-  total_slots: number | null;
-  slots_available: number | null;
-  proof_instructions: string | null;
-  status: string | null;
-};
-
 export default async function TaskDetailsPage({
   params,
   searchParams,
@@ -41,16 +26,11 @@ export default async function TaskDetailsPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(
-      "/login?error=" +
-        encodeURIComponent(
-          "Please sign in to view this task.",
-        ),
-    );
+    redirect("/login");
   }
 
   const [
-    { data: taskData, error: taskError },
+    { data: task },
     { data: workerTask },
   ] = await Promise.all([
     supabase
@@ -68,15 +48,16 @@ export default async function TaskDetailsPage({
       .maybeSingle(),
   ]);
 
-  if (taskError || !taskData) {
+  if (!task) {
     notFound();
   }
 
-  const task = taskData as TaskRecord;
   const alreadyStarted = Boolean(workerTask);
-  const noSlots =
-    Number(task.slots_available ?? 0) <= 0;
-  const inactive = task.status !== "active";
+  const canSubmit =
+    workerTask &&
+    ["started", "rejected"].includes(
+      workerTask.status,
+    );
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
@@ -86,7 +67,6 @@ export default async function TaskDetailsPage({
             <p className="text-sm font-bold tracking-wider text-emerald-400">
               WAVEMAN TASKS
             </p>
-
             <h1 className="mt-2 text-3xl font-bold">
               Task Details
             </h1>
@@ -117,12 +97,8 @@ export default async function TaskDetailsPage({
             <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold capitalize text-slate-300">
               {task.platform ?? "general"}
             </span>
-
             <span className="text-2xl font-bold text-emerald-400">
-              ₦
-              {Number(
-                task.reward_amount ?? 0,
-              ).toLocaleString("en-NG")}
+              ₦{Number(task.reward_amount ?? 0).toLocaleString("en-NG")}
             </span>
           </div>
 
@@ -138,85 +114,56 @@ export default async function TaskDetailsPage({
             <h3 className="text-lg font-bold">
               Instructions
             </h3>
-
             <div className="mt-3 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-900/70 p-5 leading-7 text-slate-300">
-              {task.instructions ??
-                "No instructions supplied."}
+              {task.instructions ?? "No instructions supplied."}
             </div>
           </section>
 
           {task.task_url ? (
-            <section className="mt-8">
-              <h3 className="text-lg font-bold">
-                Task Link
-              </h3>
-
-              <a
-                href={task.task_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-flex rounded-xl border border-blue-400/30 bg-blue-500/10 px-5 py-3 font-semibold text-blue-200 hover:bg-blue-500/20"
-              >
-                Open Task Website
-              </a>
-            </section>
+            <a
+              href={task.task_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex rounded-xl border border-blue-400/30 bg-blue-500/10 px-5 py-3 font-semibold text-blue-200 hover:bg-blue-500/20"
+            >
+              Open Task Website
+            </a>
           ) : null}
 
           <section className="mt-8">
             <h3 className="text-lg font-bold">
               Required Proof
             </h3>
-
             <p className="mt-3 rounded-2xl border border-white/10 bg-slate-900/70 p-5 leading-7 text-slate-300">
               {task.proof_instructions ??
                 "Submit clear proof that you completed the task."}
             </p>
           </section>
 
-          <div className="mt-8 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/70 p-5 sm:grid-cols-3">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">
-                Task type
-              </p>
-              <p className="mt-1 font-semibold capitalize">
-                {task.type ?? "general"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">
-                Available slots
-              </p>
-              <p className="mt-1 font-semibold">
-                {task.slots_available ?? 0}/
-                {task.total_slots ?? 0}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">
-                Status
-              </p>
-              <p className="mt-1 font-semibold capitalize">
-                {task.status ?? "draft"}
-              </p>
-            </div>
-          </div>
-
           <div className="mt-8">
-            <StartTaskButton
-              taskId={task.id}
-              alreadyStarted={alreadyStarted}
-              disabled={noSlots || inactive}
-            />
+            {!alreadyStarted ? (
+              <StartTaskButton
+                taskId={task.id}
+                disabled={
+                  Number(task.slots_available ?? 0) <= 0 ||
+                  task.status !== "active"
+                }
+              />
+            ) : canSubmit ? (
+              <Link
+                href={"/tasks/" + id + "/submit"}
+                className="block w-full rounded-xl bg-emerald-500 px-5 py-3 text-center font-bold text-slate-950 hover:bg-emerald-400"
+              >
+                {workerTask.status === "rejected"
+                  ? "Resubmit Proof"
+                  : "Submit Proof"}
+              </Link>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-slate-900 p-4 text-center font-semibold capitalize text-slate-300">
+                Task status: {workerTask?.status}
+              </div>
+            )}
           </div>
-
-          {alreadyStarted ? (
-            <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
-              You have already reserved this task. Proof
-              submission will be added in the next module.
-            </div>
-          ) : null}
         </article>
       </div>
     </main>
