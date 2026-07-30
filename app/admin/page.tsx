@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/auth/actions";
@@ -313,7 +313,10 @@ export default async function AdminDashboardPage() {
             ) : null}
 
             {canReviewProofs ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <Link
+                href="/admin/submissions"
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500/40 hover:bg-white/10"
+              >
                 <p className="text-3xl">✅</p>
 
                 <h3 className="mt-4 text-xl font-bold">
@@ -321,17 +324,20 @@ export default async function AdminDashboardPage() {
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Proof review page will be added next.
+                  Review submitted proof, approve valid work, or reject invalid submissions.
                 </p>
 
-                <span className="mt-5 inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                  Coming Soon
+                <span className="mt-5 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                  Open Proof Review
                 </span>
-              </div>
+              </Link>
             ) : null}
 
             {canManageFinance ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <Link
+                href="/admin/withdrawals"
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500/40 hover:bg-white/10"
+              >
                 <p className="text-3xl">💰</p>
 
                 <h3 className="mt-4 text-xl font-bold">
@@ -339,17 +345,20 @@ export default async function AdminDashboardPage() {
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Wallet and withdrawal tools will be added next.
+                  Review withdrawal requests, approve payments, and manage worker finance activity.
                 </p>
 
-                <span className="mt-5 inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                  Coming Soon
+                <span className="mt-5 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                  Open Finance
                 </span>
-              </div>
+              </Link>
             ) : null}
 
             {canManageSupport ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <Link
+                href="/support"
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500/40 hover:bg-white/10"
+              >
                 <p className="text-3xl">🎧</p>
 
                 <h3 className="mt-4 text-xl font-bold">
@@ -357,18 +366,20 @@ export default async function AdminDashboardPage() {
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Account complaints and support tools will be
-                  added next.
+                  Open the support area to view account, task, wallet, and withdrawal complaints.
                 </p>
 
-                <span className="mt-5 inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                  Coming Soon
+                <span className="mt-5 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                  Open Support
                 </span>
-              </div>
+              </Link>
             ) : null}
 
             {canViewReports ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <Link
+                href="/admin/activity"
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500/40 hover:bg-white/10"
+              >
                 <p className="text-3xl">📊</p>
 
                 <h3 className="mt-4 text-xl font-bold">
@@ -376,14 +387,13 @@ export default async function AdminDashboardPage() {
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  System reports and activity logs will be added
-                  next.
+                  Review platform activity logs and open the analytics dashboard.
                 </p>
 
-                <span className="mt-5 inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                  Coming Soon
+                <span className="mt-5 inline-flex rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                  Open Reports
                 </span>
-              </div>
+              </Link>
             ) : null}
           </div>
         </section>

@@ -17,81 +17,88 @@ async function requireTaskAdmin() {
     redirect("/login?error=Please+sign+in+to+continue.");
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (
-    profileError ||
-    !profile ||
-    !taskAdminRoles.includes(profile.role)
-  ) {
+  if (!profile || !taskAdminRoles.includes(profile.role)) {
     redirect(
-      "/dashboard?error=You+are+not+authorized+to+manage+tasks.",
+      "/dashboard?error=" +
+        encodeURIComponent(
+          "You are not authorized to manage tasks.",
+        ),
     );
   }
 
-  return supabase;
-}
-
-function getText(formData: FormData, name: string) {
-  return String(formData.get(name) ?? "").trim();
-}
-
-function getPositiveNumber(formData: FormData, name: string) {
-  return Number(formData.get(name) ?? 0);
-}
-
-function taskErrorRedirect(path: string, message: string): never {
-  redirect(path + "?error=" + encodeURIComponent(message));
+  return { supabase, user };
 }
 
 export async function createTask(formData: FormData) {
-  const supabase = await requireTaskAdmin();
+  const { supabase, user } = await requireTaskAdmin();
 
-  const title = getText(formData, "title");
-  const description = getText(formData, "description");
-  const instructions = getText(formData, "instructions");
-  const platform = getText(formData, "platform") || "general";
-  const taskType = getText(formData, "taskType") || "general";
-  const taskUrl = getText(formData, "taskUrl");
-  const rewardAmount = getPositiveNumber(formData, "rewardAmount");
-  const totalSlots = getPositiveNumber(formData, "totalSlots");
-  const proofInstructions = getText(formData, "proofInstructions");
-  const status = getText(formData, "status") || "draft";
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(
+    formData.get("description") ?? "",
+  ).trim();
+  const instructions = String(
+    formData.get("instructions") ?? "",
+  ).trim();
+  const platform = String(
+    formData.get("platform") ?? "general",
+  ).trim();
+  const type = String(
+    formData.get("type") ?? "general",
+  ).trim();
+  const taskUrl = String(
+    formData.get("taskUrl") ??
+      formData.get("task_url") ??
+      "",
+  ).trim();
+  const rewardAmount = Number(
+    formData.get("rewardAmount") ?? 0,
+  );
+  const totalSlots = Number(
+    formData.get("totalSlots") ?? 1,
+  );
+  const proofInstructions = String(
+    formData.get("proofInstructions") ?? "",
+  ).trim();
+  const status = String(
+    formData.get("status") ?? "draft",
+  ).trim();
 
   if (!title || !description || !instructions) {
-    taskErrorRedirect(
-      "/admin/tasks/new",
-      "Title, description, and instructions are required.",
+    redirect(
+      "/admin/tasks/new?error=" +
+        encodeURIComponent(
+          "Title, description, and instructions are required.",
+        ),
     );
   }
 
-  if (!Number.isFinite(rewardAmount) || rewardAmount <= 0) {
-    taskErrorRedirect(
-      "/admin/tasks/new",
-      "Reward amount must be greater than zero.",
+  if (
+    !Number.isFinite(rewardAmount) ||
+    rewardAmount <= 0
+  ) {
+    redirect(
+      "/admin/tasks/new?error=" +
+        encodeURIComponent(
+          "Enter a valid reward amount.",
+        ),
     );
   }
 
   if (
     !Number.isInteger(totalSlots) ||
-    totalSlots <= 0
+    totalSlots < 1
   ) {
-    taskErrorRedirect(
-      "/admin/tasks/new",
-      "Worker slots must be a whole number greater than zero.",
-    );
-  }
-
-  const allowedStatuses = ["draft", "active", "paused"];
-
-  if (!allowedStatuses.includes(status)) {
-    taskErrorRedirect(
-      "/admin/tasks/new",
-      "Invalid publishing status.",
+    redirect(
+      "/admin/tasks/new?error=" +
+        encodeURIComponent(
+          "Worker slots must be at least 1.",
+        ),
     );
   }
 
@@ -99,19 +106,22 @@ export async function createTask(formData: FormData) {
     title,
     description,
     instructions,
-    platform,
-    type: taskType,
+    platform: platform || "general",
+    type: type || "general",
     task_url: taskUrl || null,
     reward_amount: rewardAmount,
     total_slots: totalSlots,
     slots_available: totalSlots,
     proof_instructions: proofInstructions || null,
     status,
-    campaign_id: null,
+    created_by: user.id,
   });
 
   if (error) {
-    taskErrorRedirect("/admin/tasks/new", error.message);
+    redirect(
+      "/admin/tasks/new?error=" +
+        encodeURIComponent(error.message),
+    );
   }
 
   revalidatePath("/admin/tasks");
@@ -120,148 +130,77 @@ export async function createTask(formData: FormData) {
 
   redirect(
     "/admin/tasks?message=" +
-      encodeURIComponent("Task created successfully."),
+      encodeURIComponent(
+        "Task created successfully.",
+      ),
   );
 }
 
 export async function updateTask(formData: FormData) {
-  const supabase = await requireTaskAdmin();
+  const { supabase } = await requireTaskAdmin();
 
-  const taskId = getText(formData, "task_id");
-  const title = getText(formData, "title");
-  const description = getText(formData, "description");
-  const instructions = getText(formData, "instructions");
-  const platform = getText(formData, "platform") || "general";
-  const taskType = getText(formData, "taskType") || "general";
-  const taskUrl = getText(formData, "taskUrl");
-  const rewardAmount = getPositiveNumber(formData, "rewardAmount");
-  const totalSlots = getPositiveNumber(formData, "totalSlots");
-  const proofInstructions = getText(formData, "proofInstructions");
-  const status = getText(formData, "status") || "draft";
-
-  if (!taskId) {
-    taskErrorRedirect(
-      "/admin/tasks",
-      "Task ID is required.",
-    );
-  }
-
-  const editPath = "/admin/tasks/" + taskId + "/edit";
-
-  if (!title || !description || !instructions) {
-    taskErrorRedirect(
-      editPath,
-      "Title, description, and instructions are required.",
-    );
-  }
-
-  if (!Number.isFinite(rewardAmount) || rewardAmount <= 0) {
-    taskErrorRedirect(
-      editPath,
-      "Reward amount must be greater than zero.",
-    );
-  }
-
-  if (
-    !Number.isInteger(totalSlots) ||
-    totalSlots <= 0
-  ) {
-    taskErrorRedirect(
-      editPath,
-      "Worker slots must be a whole number greater than zero.",
-    );
-  }
-
-  const allowedStatuses = [
-    "draft",
-    "active",
-    "paused",
-    "completed",
-    "cancelled",
-  ];
-
-  if (!allowedStatuses.includes(status)) {
-    taskErrorRedirect(editPath, "Invalid task status.");
-  }
-
-  const { data: existingTask, error: existingTaskError } =
-    await supabase
-      .from("tasks")
-      .select("total_slots,slots_available")
-      .eq("id", taskId)
-      .maybeSingle();
-
-  if (existingTaskError || !existingTask) {
-    taskErrorRedirect(
-      editPath,
-      existingTaskError?.message ?? "Task not found.",
-    );
-  }
-
-  const previousTotal = Number(existingTask.total_slots ?? 0);
-  const previousAvailable = Number(
-    existingTask.slots_available ?? 0,
+  const taskId = String(
+    formData.get("task_id") ?? "",
+  ).trim();
+  const title = String(
+    formData.get("title") ?? "",
+  ).trim();
+  const description = String(
+    formData.get("description") ?? "",
+  ).trim();
+  const rewardAmount = Number(
+    formData.get("reward_amount") ??
+      formData.get("reward") ??
+      0,
   );
-  const occupiedSlots = Math.max(
-    0,
-    previousTotal - previousAvailable,
-  );
+  const status = String(
+    formData.get("status") ?? "draft",
+  ).trim();
 
-  if (totalSlots < occupiedSlots) {
-    taskErrorRedirect(
-      editPath,
-      "Total slots cannot be lower than the number of occupied slots.",
+  if (!taskId || !title || !description) {
+    redirect(
+      "/admin/tasks?error=" +
+        encodeURIComponent(
+          "Task ID, title, and description are required.",
+        ),
     );
   }
-
-  const newAvailableSlots = Math.max(
-    0,
-    totalSlots - occupiedSlots,
-  );
 
   const { error } = await supabase
     .from("tasks")
     .update({
       title,
       description,
-      instructions,
-      platform,
-      type: taskType,
-      task_url: taskUrl || null,
       reward_amount: rewardAmount,
-      total_slots: totalSlots,
-      slots_available: newAvailableSlots,
-      proof_instructions: proofInstructions || null,
       status,
+      updated_at: new Date().toISOString(),
     })
     .eq("id", taskId);
 
   if (error) {
-    taskErrorRedirect(editPath, error.message);
+    redirect(
+      "/admin/tasks/" +
+        taskId +
+        "/edit?error=" +
+        encodeURIComponent(error.message),
+    );
   }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/tasks");
-  revalidatePath("/dashboard");
-  revalidatePath(editPath);
-
   redirect(
     "/admin/tasks?message=" +
-      encodeURIComponent("Task updated successfully."),
+      encodeURIComponent(
+        "Task updated successfully.",
+      ),
   );
 }
 
 export async function deleteTask(formData: FormData) {
-  const supabase = await requireTaskAdmin();
-
-  const taskId = getText(formData, "task_id");
-
-  if (!taskId) {
-    taskErrorRedirect(
-      "/admin/tasks",
-      "Task ID is required.",
-    );
-  }
+  const { supabase } = await requireTaskAdmin();
+  const taskId = String(
+    formData.get("task_id") ?? "",
+  ).trim();
 
   const { error } = await supabase
     .from("tasks")
@@ -269,15 +208,18 @@ export async function deleteTask(formData: FormData) {
     .eq("id", taskId);
 
   if (error) {
-    taskErrorRedirect("/admin/tasks", error.message);
+    redirect(
+      "/admin/tasks?error=" +
+        encodeURIComponent(error.message),
+    );
   }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/tasks");
-  revalidatePath("/dashboard");
-
   redirect(
     "/admin/tasks?message=" +
-      encodeURIComponent("Task deleted successfully."),
+      encodeURIComponent(
+        "Task deleted successfully.",
+      ),
   );
 }
