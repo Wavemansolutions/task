@@ -1,63 +1,46 @@
-"use server";
+'use server';
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { createClient } from '@/utils/supabase/server';
 
-export async function requestWithdrawal(
-  formData: FormData,
-) {
-  const amount = Number(
-    formData.get("amount") ?? 0,
-  );
+function text(value: FormDataEntryValue | null): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
 
-  const bankName = String(
-    formData.get("bank_name") ?? "",
-  ).trim();
-
-  const accountName = String(
-    formData.get("account_name") ?? "",
-  ).trim();
-
-  const accountNumber = String(
-    formData.get("account_number") ?? "",
-  ).trim();
-
+export async function savePayoutAccount(formData: FormData) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { error } = await supabase.rpc(
-    "create_withdrawal_request",
-    {
-      p_amount: amount,
-      p_bank_name: bankName,
-      p_account_name: accountName,
-      p_account_number: accountNumber,
-    },
-  );
+  const { error } = await supabase.rpc('save_payout_account', {
+    p_account_name: text(formData.get('account_name')),
+    p_account_number: text(formData.get('account_number')),
+    p_bank_name: text(formData.get('bank_name')),
+    p_bank_code: text(formData.get('bank_code')) || null,
+    p_provider: 'bank',
+  });
 
   if (error) {
-    redirect(
-      "/wallet/withdraw?error=" +
-        encodeURIComponent(error.message),
-    );
+    redirect(`/wallet?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/wallet");
-  revalidatePath("/wallet/withdraw");
-  revalidatePath("/admin/withdrawals");
+  revalidatePath('/wallet');
+  redirect('/wallet?account=saved');
+}
 
-  redirect(
-    "/wallet/withdraw?message=" +
-      encodeURIComponent(
-        "Withdrawal request submitted successfully.",
-      ),
-  );
+export async function requestWithdrawal(formData: FormData) {
+  const supabase = await createClient();
+  const amount = Number(text(formData.get('amount')));
+
+  const { error } = await supabase.rpc('request_withdrawal', {
+    p_amount: amount,
+    p_payout_account_id: text(formData.get('payout_account_id')),
+  });
+
+  if (error) {
+    redirect(`/wallet?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath('/wallet');
+  revalidatePath('/dashboard');
+  redirect('/wallet?withdrawal=requested');
 }
