@@ -139,6 +139,7 @@ export async function createTaskAction(formData: FormData) {
         name: title,
         description,
         owner_id: user.id,
+        created_by: user.id,
         status:
           status === 'active' ? 'active' : 'draft',
       })
