@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -34,7 +35,10 @@ type ProfileRecord = {
   role: string | null;
 };
 
-const allowedAdminRoles = ['super_admin', 'task_manager'];
+const allowedAdminRoles = [
+  'super_admin',
+  'task_manager',
+];
 
 const supportedPlatforms = new Set([
   'facebook',
@@ -51,12 +55,16 @@ const supportedPlatforms = new Set([
   'general',
 ]);
 
-function getPlatformThumbnail(platform: string | null) {
-  const normalizedPlatform = platform?.toLowerCase().trim() || 'general';
+function getPlatformThumbnail(
+  platform: string | null,
+) {
+  const normalizedPlatform =
+    platform?.toLowerCase().trim() || 'general';
 
-  const safePlatform = supportedPlatforms.has(normalizedPlatform)
-    ? normalizedPlatform
-    : 'general';
+  const safePlatform =
+    supportedPlatforms.has(normalizedPlatform)
+      ? normalizedPlatform
+      : 'general';
 
   return `/task-thumbnails/${safePlatform}.svg`;
 }
@@ -75,10 +83,15 @@ export default async function EditTaskPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login?error=Please+sign+in+to+continue.');
+    redirect(
+      '/login?error=Please+sign+in+to+continue.',
+    );
   }
 
-  const { data: profileData, error: profileError } = await supabase
+  const {
+    data: profileData,
+    error: profileError,
+  } = await supabase
     .from('profiles')
     .select('full_name,role')
     .eq('id', user.id)
@@ -92,49 +105,112 @@ export default async function EditTaskPage({
     );
   }
 
-  const profile = profileData as ProfileRecord | null;
-  const userRole = profile?.role ?? 'worker';
+  const profile =
+    profileData as ProfileRecord | null;
 
-  if (!allowedAdminRoles.includes(userRole)) {
+  const userRole =
+    profile?.role ?? 'worker';
+
+  if (
+    !allowedAdminRoles.includes(userRole)
+  ) {
     redirect(
       '/dashboard?error=You+are+not+authorized+to+manage+tasks.',
     );
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('tasks')
-    .select(
-      [
-        'id',
-        'title',
-        'description',
-        'instructions',
-        'platform',
-        'type',
-        'task_url',
-        'reward_amount',
-        'total_slots',
-        'proof_instructions',
-        'status',
-      ].join(','),
-    )
+    .select(`
+      id,
+      title,
+      description,
+      instructions,
+      platform,
+      type,
+      task_url,
+      reward_amount,
+      total_slots,
+      proof_instructions,
+      status
+    `)
     .eq('id', id)
-    .maybeSingle();
+    .single();
 
   if (error || !data) {
     notFound();
   }
 
-  const task = data as TaskRecord;
-  const thumbnail = getPlatformThumbnail(task.platform);
+  const task: TaskRecord = {
+    id: String(data.id),
+
+    title:
+      typeof data.title === 'string'
+        ? data.title
+        : null,
+
+    description:
+      typeof data.description === 'string'
+        ? data.description
+        : null,
+
+    instructions:
+      typeof data.instructions === 'string'
+        ? data.instructions
+        : null,
+
+    platform:
+      typeof data.platform === 'string'
+        ? data.platform
+        : null,
+
+    type:
+      typeof data.type === 'string'
+        ? data.type
+        : null,
+
+    task_url:
+      typeof data.task_url === 'string'
+        ? data.task_url
+        : null,
+
+    reward_amount:
+      typeof data.reward_amount === 'number' ||
+      typeof data.reward_amount === 'string'
+        ? data.reward_amount
+        : null,
+
+    total_slots:
+      typeof data.total_slots === 'number'
+        ? data.total_slots
+        : null,
+
+    proof_instructions:
+      typeof data.proof_instructions ===
+      'string'
+        ? data.proof_instructions
+        : null,
+
+    status:
+      typeof data.status === 'string'
+        ? data.status
+        : null,
+  };
+
+  const thumbnail =
+    getPlatformThumbnail(task.platform);
+
+  const userName =
+    profile?.full_name ||
+    user.email?.split('@')[0] ||
+    'Administrator';
 
   return (
     <AppShell
-      userName={
-        profile?.full_name ||
-        user.email?.split('@')[0] ||
-        'Administrator'
-      }
+      userName={userName}
       userRole={userRole}
       isAdmin
     >
@@ -151,8 +227,9 @@ export default async function EditTaskPage({
               </h1>
 
               <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Update the task information, reward, proof
-                requirements and publishing status.
+                Update the task information,
+                reward, proof requirements and
+                publishing status.
               </p>
             </div>
 
@@ -188,11 +265,16 @@ export default async function EditTaskPage({
           <section className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="grid md:grid-cols-[320px_1fr]">
               <div className="bg-slate-100 p-5">
-                <div className="aspect-[16/10] overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                  <img
+                <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <Image
                     src={thumbnail}
-                    alt={`${task.platform ?? 'General'} task thumbnail`}
-                    className="h-full w-full object-cover"
+                    alt={`${
+                      task.platform ?? 'General'
+                    } task thumbnail`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 320px"
+                    className="object-cover"
+                    priority
                   />
                 </div>
               </div>
@@ -203,7 +285,8 @@ export default async function EditTaskPage({
                 </p>
 
                 <h2 className="mt-2 text-2xl font-extrabold text-slate-950">
-                  {task.title || 'Untitled task'}
+                  {task.title ||
+                    'Untitled task'}
                 </h2>
 
                 <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -222,11 +305,15 @@ export default async function EditTaskPage({
 
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                     ₦
-                    {Number(task.reward_amount ?? 0).toLocaleString(
+                    {Number(
+                      task.reward_amount ?? 0,
+                    ).toLocaleString(
                       'en-NG',
                       {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
+                        minimumFractionDigits:
+                          0,
+                        maximumFractionDigits:
+                          2,
                       },
                     )}
                   </span>
@@ -239,7 +326,11 @@ export default async function EditTaskPage({
             action={updateTask}
             className="space-y-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
           >
-            <input type="hidden" name="task_id" value={task.id} />
+            <input
+              type="hidden"
+              name="task_id"
+              value={task.id}
+            />
 
             <section>
               <div className="mb-5">
@@ -248,7 +339,8 @@ export default async function EditTaskPage({
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Edit the title, description and worker instructions.
+                  Edit the title, description
+                  and worker instructions.
                 </p>
               </div>
 
@@ -261,7 +353,9 @@ export default async function EditTaskPage({
                   <input
                     name="title"
                     required
-                    defaultValue={task.title ?? ''}
+                    defaultValue={
+                      task.title ?? ''
+                    }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
                 </label>
@@ -275,7 +369,9 @@ export default async function EditTaskPage({
                     name="description"
                     required
                     rows={3}
-                    defaultValue={task.description ?? ''}
+                    defaultValue={
+                      task.description ?? ''
+                    }
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
                 </label>
@@ -289,7 +385,9 @@ export default async function EditTaskPage({
                     name="instructions"
                     required
                     rows={7}
-                    defaultValue={task.instructions ?? ''}
+                    defaultValue={
+                      task.instructions ?? ''
+                    }
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
                 </label>
@@ -303,7 +401,8 @@ export default async function EditTaskPage({
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Select where the task happens and what the worker
+                  Select where the task
+                  happens and what the worker
                   must do.
                 </p>
               </div>
@@ -316,21 +415,59 @@ export default async function EditTaskPage({
 
                   <select
                     name="platform"
-                    defaultValue={task.platform ?? 'general'}
+                    defaultValue={
+                      task.platform ??
+                      'general'
+                    }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   >
-                    <option value="facebook">Facebook</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="tiktok">TikTok</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="telegram">Telegram</option>
-                    <option value="x">X</option>
-                    <option value="linkedin">LinkedIn</option>
-                    <option value="google">Google</option>
-                    <option value="trustpilot">Trustpilot</option>
-                    <option value="website">Website</option>
-                    <option value="general">General</option>
+                    <option value="facebook">
+                      Facebook
+                    </option>
+
+                    <option value="instagram">
+                      Instagram
+                    </option>
+
+                    <option value="tiktok">
+                      TikTok
+                    </option>
+
+                    <option value="youtube">
+                      YouTube
+                    </option>
+
+                    <option value="whatsapp">
+                      WhatsApp
+                    </option>
+
+                    <option value="telegram">
+                      Telegram
+                    </option>
+
+                    <option value="x">
+                      X
+                    </option>
+
+                    <option value="linkedin">
+                      LinkedIn
+                    </option>
+
+                    <option value="google">
+                      Google
+                    </option>
+
+                    <option value="trustpilot">
+                      Trustpilot
+                    </option>
+
+                    <option value="website">
+                      Website
+                    </option>
+
+                    <option value="general">
+                      General
+                    </option>
                   </select>
                 </label>
 
@@ -341,18 +478,46 @@ export default async function EditTaskPage({
 
                   <select
                     name="taskType"
-                    defaultValue={task.type ?? 'general'}
+                    defaultValue={
+                      task.type ?? 'general'
+                    }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   >
-                    <option value="follow">Follow account</option>
-                    <option value="like">Like post</option>
-                    <option value="comment">Comment</option>
-                    <option value="share">Share post</option>
-                    <option value="subscribe">Subscribe</option>
-                    <option value="join">Join group</option>
-                    <option value="visit">Visit website</option>
-                    <option value="review">Submit review</option>
-                    <option value="general">General task</option>
+                    <option value="follow">
+                      Follow account
+                    </option>
+
+                    <option value="like">
+                      Like post
+                    </option>
+
+                    <option value="comment">
+                      Comment
+                    </option>
+
+                    <option value="share">
+                      Share post
+                    </option>
+
+                    <option value="subscribe">
+                      Subscribe
+                    </option>
+
+                    <option value="join">
+                      Join group
+                    </option>
+
+                    <option value="visit">
+                      Visit website
+                    </option>
+
+                    <option value="review">
+                      Submit review
+                    </option>
+
+                    <option value="general">
+                      General task
+                    </option>
                   </select>
                 </label>
               </div>
@@ -365,7 +530,9 @@ export default async function EditTaskPage({
                 <input
                   name="taskUrl"
                   type="url"
-                  defaultValue={task.task_url ?? ''}
+                  defaultValue={
+                    task.task_url ?? ''
+                  }
                   placeholder="https://example.com/task"
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                 />
@@ -379,7 +546,8 @@ export default async function EditTaskPage({
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Configure how much workers earn and how many can
+                  Configure how much workers
+                  earn and how many can
                   complete this task.
                 </p>
               </div>
@@ -396,7 +564,9 @@ export default async function EditTaskPage({
                     min="0.01"
                     step="0.01"
                     required
-                    defaultValue={Number(task.reward_amount ?? 0)}
+                    defaultValue={Number(
+                      task.reward_amount ?? 0,
+                    )}
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
                 </label>
@@ -412,7 +582,9 @@ export default async function EditTaskPage({
                     min="1"
                     step="1"
                     required
-                    defaultValue={task.total_slots ?? 1}
+                    defaultValue={
+                      task.total_slots ?? 1
+                    }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
                 </label>
@@ -426,7 +598,8 @@ export default async function EditTaskPage({
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Define the required evidence and current task
+                  Define the required
+                  evidence and current task
                   availability.
                 </p>
               </div>
@@ -439,7 +612,10 @@ export default async function EditTaskPage({
                 <textarea
                   name="proofInstructions"
                   rows={4}
-                  defaultValue={task.proof_instructions ?? ''}
+                  defaultValue={
+                    task.proof_instructions ??
+                    ''
+                  }
                   placeholder="Describe the screenshot, URL or other evidence the worker must submit."
                   className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                 />
@@ -452,14 +628,30 @@ export default async function EditTaskPage({
 
                 <select
                   name="status"
-                  defaultValue={task.status ?? 'draft'}
+                  defaultValue={
+                    task.status ?? 'draft'
+                  }
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                 >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="draft">
+                    Draft
+                  </option>
+
+                  <option value="active">
+                    Active
+                  </option>
+
+                  <option value="paused">
+                    Paused
+                  </option>
+
+                  <option value="completed">
+                    Completed
+                  </option>
+
+                  <option value="cancelled">
+                    Cancelled
+                  </option>
                 </select>
               </label>
             </section>
