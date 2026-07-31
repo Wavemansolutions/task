@@ -1,262 +1,224 @@
-﻿import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createTask } from "@/app/admin/tasks/actions";
+﻿import Link from 'next/link';
+import { createTaskAction } from './actions';
 
-type NewTaskPageProps = {
-  searchParams: Promise<{
-    error?: string;
-  }>;
-};
-
-const allowedAdminRoles = [
-  "super_admin",
-  "task_manager",
-];
-
-export default async function NewTaskPage({
+export default function CreateTaskPage({
   searchParams,
-}: NewTaskPageProps) {
-  const params = await searchParams;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?error=Please+sign+in+to+continue.");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (
-    !profile ||
-    !allowedAdminRoles.includes(profile.role)
-  ) {
-    redirect(
-      "/dashboard?error=You+are+not+authorized+to+create+tasks.",
-    );
-  }
-
+}: {
+  searchParams?: {
+    error?: string;
+    success?: string;
+  };
+}) {
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <div className="mx-auto max-w-3xl">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-bold tracking-wider text-emerald-400">
-              WAVEMAN TASKS ADMIN
-            </p>
+    <main className="mx-auto max-w-3xl p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">Task management</p>
+          <h1 className="text-3xl font-bold">Create Task</h1>
+        </div>
 
-            <h1 className="mt-2 text-3xl font-bold">
-              Create New Task
-            </h1>
-
-            <p className="mt-2 text-slate-400">
-              Add a task for workers to complete.
-            </p>
-          </div>
-
-          <Link
-            href="/admin/tasks"
-            className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium hover:bg-white/10"
-          >
-            View all tasks
-          </Link>
-        </header>
-
-        {params.error ? (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-            {params.error}
-          </div>
-        ) : null}
-
-        <form
-          action={createTask}
-          className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8"
+        <Link
+          href="/admin/tasks"
+          className="rounded-lg border px-4 py-2 text-sm font-medium"
         >
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Task title
-            </span>
-
-            <input
-              name="title"
-              required
-              placeholder="Follow our Facebook page"
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Short description
-            </span>
-
-            <textarea
-              name="description"
-              required
-              rows={3}
-              placeholder="Briefly explain what the worker will do."
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Full instructions
-            </span>
-
-            <textarea
-              name="instructions"
-              required
-              rows={6}
-              placeholder="Write each step the worker must follow."
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Platform
-              </span>
-
-              <select
-                name="platform"
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              >
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-                <option value="tiktok">TikTok</option>
-                <option value="youtube">YouTube</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="telegram">Telegram</option>
-                <option value="x">X</option>
-                <option value="website">Website</option>
-                <option value="google">Google</option>
-                <option value="general">General</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Task type
-              </span>
-
-              <select
-                name="taskType"
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              >
-                <option value="follow">Follow account</option>
-                <option value="like">Like post</option>
-                <option value="comment">Comment</option>
-                <option value="share">Share post</option>
-                <option value="subscribe">Subscribe</option>
-                <option value="join">Join group</option>
-                <option value="visit">Visit website</option>
-                <option value="review">Submit review</option>
-                <option value="general">General task</option>
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Task URL
-            </span>
-
-            <input
-              name="taskUrl"
-              type="url"
-              placeholder="https://example.com/task"
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Reward amount
-              </span>
-
-              <input
-                name="rewardAmount"
-                type="number"
-                min="1"
-                step="0.01"
-                required
-                placeholder="150"
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Number of worker slots
-              </span>
-
-              <input
-                name="totalSlots"
-                type="number"
-                min="1"
-                step="1"
-                required
-                defaultValue="1"
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Required proof
-            </span>
-
-            <textarea
-              name="proofInstructions"
-              rows={3}
-              placeholder="Example: Upload a screenshot showing that you followed the page."
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Publishing status
-            </span>
-
-            <select
-              name="status"
-              defaultValue="draft"
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            >
-              <option value="draft">
-                Draft — hidden from workers
-              </option>
-
-              <option value="active">
-                Active — visible immediately
-              </option>
-
-              <option value="paused">
-                Paused — temporarily hidden
-              </option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-emerald-500 px-5 py-4 font-bold text-slate-950 transition hover:bg-emerald-400"
-          >
-            Create Task
-          </button>
-        </form>
+          Back to Tasks
+        </Link>
       </div>
+
+      {searchParams?.error && (
+        <div className="mb-5 rounded-lg border border-red-300 bg-red-50 p-4 text-red-700">
+          {decodeURIComponent(searchParams.error)}
+        </div>
+      )}
+
+      {searchParams?.success && (
+        <div className="mb-5 rounded-lg border border-green-300 bg-green-50 p-4 text-green-700">
+          Task created successfully.
+        </div>
+      )}
+
+      <form
+        action={createTaskAction}
+        className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm"
+      >
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Task title
+          </label>
+
+          <input
+            name="title"
+            type="text"
+            required
+            minLength={3}
+            placeholder="Example: Like and share our Facebook post"
+            className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Description
+          </label>
+
+          <textarea
+            name="description"
+            required
+            rows={5}
+            placeholder="Explain exactly what the worker must do."
+            className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Task instructions
+          </label>
+
+          <textarea
+            name="instructions"
+            rows={5}
+            placeholder="Step 1: Open the link. Step 2: Like the post. Step 3: Upload proof."
+            className="w-full rounded-lg border px-4 py-3 outline-none focus:ring-2"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Task type
+          </label>
+
+          <select
+            name="type"
+            required
+            defaultValue="general"
+            className="w-full rounded-lg border px-4 py-3"
+          >
+            <option value="general">General</option>
+            <option value="like">Like</option>
+            <option value="follow">Follow</option>
+            <option value="comment">Comment</option>
+            <option value="share">Share</option>
+            <option value="subscribe">Subscribe</option>
+            <option value="join">Join Group</option>
+            <option value="visit">Visit Website</option>
+            <option value="review">Review</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Task link
+          </label>
+
+          <input
+            name="task_url"
+            type="url"
+            placeholder="https://example.com/post"
+            className="w-full rounded-lg border px-4 py-3"
+          />
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Reward per worker
+            </label>
+
+            <input
+              name="reward_amount"
+              type="number"
+              required
+              min="1"
+              step="0.01"
+              defaultValue="50"
+              className="w-full rounded-lg border px-4 py-3"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Number of workers
+            </label>
+
+            <input
+              name="total_slots"
+              type="number"
+              required
+              min="1"
+              defaultValue="20"
+              className="w-full rounded-lg border px-4 py-3"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Proof required
+          </label>
+
+          <select
+            name="proof_type"
+            defaultValue="screenshot"
+            className="w-full rounded-lg border px-4 py-3"
+          >
+            <option value="screenshot">Screenshot</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="text">Text response</option>
+            <option value="link">Proof link</option>
+          </select>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Start date
+            </label>
+
+            <input
+              name="starts_at"
+              type="datetime-local"
+              className="w-full rounded-lg border px-4 py-3"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              End date
+            </label>
+
+            <input
+              name="ends_at"
+              type="datetime-local"
+              className="w-full rounded-lg border px-4 py-3"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold">
+            Status
+          </label>
+
+          <select
+            name="status"
+            defaultValue="active"
+            className="w-full rounded-lg border px-4 py-3"
+          >
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-black px-5 py-3 font-semibold text-white hover:bg-gray-800"
+        >
+          Create Task
+        </button>
+      </form>
     </main>
   );
 }
