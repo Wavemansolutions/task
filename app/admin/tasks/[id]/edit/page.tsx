@@ -1,15 +1,13 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { updateTask } from "@/app/admin/tasks/actions";
+import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { updateTask } from '@/app/admin/tasks/actions';
+import { AppShell } from '@/components/layout/AppShell';
+import { detectTaskPlatform, generatedTaskThumbnail } from '@/lib/task-platform';
 
 type EditTaskPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-  searchParams: Promise<{
-    error?: string;
-  }>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
 };
 
 type TaskRecord = {
@@ -17,7 +15,9 @@ type TaskRecord = {
   title: string | null;
   description: string | null;
   instructions: string | null;
-  platform: string | null;
+  platform?: string | null;
+  social_platform?: string | null;
+  thumbnail_url?: string | null;
   type: string | null;
   task_url: string | null;
   reward_amount: number | string | null;
@@ -26,277 +26,143 @@ type TaskRecord = {
   status: string | null;
 };
 
-const allowedAdminRoles = [
-  "super_admin",
-  "task_manager",
-];
+const allowedAdminRoles = ['super_admin', 'admin', 'task_manager'];
 
-export default async function EditTaskPage({
-  params,
-  searchParams,
-}: EditTaskPageProps) {
+export default async function EditTaskPage({ params, searchParams }: EditTaskPageProps) {
   const { id } = await params;
   const query = await searchParams;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?error=Please+sign+in+to+continue.");
-  }
+  if (!user) redirect('/login?error=Please+sign+in+to+continue.');
 
   const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
+    .from('profiles')
+    .select('full_name,role')
+    .eq('id', user.id)
     .maybeSingle();
 
-  if (
-    !profile ||
-    !allowedAdminRoles.includes(profile.role)
-  ) {
-    redirect(
-      "/dashboard?error=You+are+not+authorized+to+manage+tasks.",
-    );
+  const role = profile?.role ?? 'worker';
+  if (!allowedAdminRoles.includes(role)) {
+    redirect('/dashboard?error=You+are+not+authorized+to+manage+tasks.');
   }
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .select(
-      "id,title,description,instructions,platform,type,task_url,reward_amount,total_slots,proof_instructions,status",
-    )
-    .eq("id", id)
+  let response = await supabase
+    .from('tasks')
+    .select('id,title,description,instructions,platform,social_platform,thumbnail_url,type,task_url,reward_amount,total_slots,proof_instructions,status')
+    .eq('id', id)
     .maybeSingle();
 
-  if (error || !data) {
-    notFound();
+  if (response.error && /column .* does not exist|schema cache/i.test(response.error.message)) {
+    response = await supabase
+      .from('tasks')
+      .select('id,title,description,instructions,platform,type,task_url,reward_amount,total_slots,proof_instructions,status')
+      .eq('id', id)
+      .maybeSingle();
   }
 
-  const task = data as TaskRecord;
+  if (response.error || !response.data) notFound();
+
+  const task = response.data as TaskRecord;
+  const platform = detectTaskPlatform({
+    social_platform: task.social_platform ?? task.platform,
+    type: task.type,
+    title: task.title,
+    description: task.description,
+  });
+  const thumbnail = task.thumbnail_url || generatedTaskThumbnail(platform);
+  const displayName = profile?.full_name || user.email?.split('@')[0] || 'Administrator';
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <div className="mx-auto max-w-3xl">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <AppShell userName={displayName} userRole={role} isAdmin>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-bold tracking-wider text-emerald-400">
-              WAVEMAN TASKS ADMIN
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold">
-              Edit Task
-            </h1>
-
-            <p className="mt-2 text-slate-400">
-              Update the task information below.
-            </p>
+            <p className="text-sm font-bold text-green-600">Task management</p>
+            <h1 className="mt-1 text-3xl font-black text-slate-950">Edit task</h1>
+            <p className="mt-2 text-sm text-slate-500">Update the real task details shown to workers.</p>
           </div>
-
-          <Link
-            href="/admin/tasks"
-            className="w-fit rounded-xl border border-white/10 bg-white/5 px-5 py-3 font-medium hover:bg-white/10"
-          >
-            Back to tasks
-          </Link>
+          <Link href="/admin/tasks" className="w-fit rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:border-green-500 hover:text-green-700">Back to tasks</Link>
         </header>
 
-        {query.error ? (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-            {query.error}
-          </div>
-        ) : null}
+        {query.error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{query.error}</div> : null}
 
-        <form
-          action={updateTask}
-          className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8"
-        >
-          <input
-            type="hidden"
-            name="task_id"
-            value={task.id}
-          />
+        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+          <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+            <div className="aspect-[16/10] overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+              <img src={thumbnail} alt={`${platform} task thumbnail`} className="h-full w-full object-cover" />
+            </div>
+            <p className="mt-4 text-xs font-bold uppercase tracking-wide text-green-600">{platform}</p>
+            <h2 className="mt-1 text-lg font-black text-slate-950">{task.title || 'Untitled task'}</h2>
+            <p className="mt-2 text-sm text-slate-500">The thumbnail is kept separate from the title so the image remains clear.</p>
+            <Link href={`/tasks/${task.id}`} className="mt-4 block rounded-xl border border-green-600 px-4 py-2.5 text-center text-sm font-bold text-green-700 hover:bg-green-600 hover:text-white">View public task</Link>
+          </aside>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Task title
-            </span>
+          <form action={updateTask} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <input type="hidden" name="task_id" value={task.id} />
 
-            <input
-              name="title"
-              required
-              defaultValue={task.title ?? ""}
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Short description
-            </span>
-
-            <textarea
-              name="description"
-              required
-              rows={3}
-              defaultValue={task.description ?? ""}
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Full instructions
-            </span>
-
-            <textarea
-              name="instructions"
-              required
-              rows={6}
-              defaultValue={task.instructions ?? ""}
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Platform
-              </span>
+              <span className="mb-2 block text-sm font-bold text-slate-700">Task title</span>
+              <input name="title" required defaultValue={task.title ?? ''} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+            </label>
 
-              <select
-                name="platform"
-                defaultValue={task.platform ?? "general"}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              >
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-                <option value="tiktok">TikTok</option>
-                <option value="youtube">YouTube</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="telegram">Telegram</option>
-                <option value="x">X</option>
-                <option value="website">Website</option>
-                <option value="google">Google</option>
-                <option value="general">General</option>
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">Short description</span>
+              <textarea name="description" required rows={3} defaultValue={task.description ?? ''} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">Full instructions</span>
+              <textarea name="instructions" required rows={7} defaultValue={task.instructions ?? ''} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+            </label>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">Platform</span>
+                <select name="platform" defaultValue={task.platform ?? platform} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500">
+                  {['facebook','instagram','tiktok','youtube','whatsapp','telegram','x','linkedin','google','trustpilot','general'].map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">Task type</span>
+                <select name="taskType" defaultValue={task.type ?? 'general'} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500">
+                  {['follow','like','comment','share','subscribe','join','visit','review','general'].map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">Task URL</span>
+              <input name="taskUrl" type="url" defaultValue={task.task_url ?? ''} placeholder="https://example.com/task" className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+            </label>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">Reward amount</span>
+                <input name="rewardAmount" type="number" min="0.01" step="0.01" required defaultValue={Number(task.reward_amount ?? 0)} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">Total worker slots</span>
+                <input name="totalSlots" type="number" min="1" step="1" required defaultValue={task.total_slots ?? 1} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">Required proof</span>
+              <textarea name="proofInstructions" rows={4} defaultValue={task.proof_instructions ?? ''} className="w-full resize-y rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500" />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">Status</span>
+              <select name="status" defaultValue={task.status ?? 'draft'} className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-green-500">
+                {['draft','active','paused','completed','cancelled'].map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             </label>
 
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Task type
-              </span>
-
-              <select
-                name="taskType"
-                defaultValue={task.type ?? "general"}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              >
-                <option value="follow">Follow account</option>
-                <option value="like">Like post</option>
-                <option value="comment">Comment</option>
-                <option value="share">Share post</option>
-                <option value="subscribe">Subscribe</option>
-                <option value="join">Join group</option>
-                <option value="visit">Visit website</option>
-                <option value="review">Submit review</option>
-                <option value="general">General task</option>
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Task URL
-            </span>
-
-            <input
-              name="taskUrl"
-              type="url"
-              defaultValue={task.task_url ?? ""}
-              placeholder="https://example.com/task"
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Reward amount
-              </span>
-
-              <input
-                name="rewardAmount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                defaultValue={Number(
-                  task.reward_amount ?? 0,
-                )}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Number of worker slots
-              </span>
-
-              <input
-                name="totalSlots"
-                type="number"
-                min="1"
-                step="1"
-                required
-                defaultValue={task.total_slots ?? 1}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Required proof
-            </span>
-
-            <textarea
-              name="proofInstructions"
-              rows={3}
-              defaultValue={
-                task.proof_instructions ?? ""
-              }
-              className="w-full resize-y rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              Status
-            </span>
-
-            <select
-              name="status"
-              defaultValue={task.status ?? "draft"}
-              className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-emerald-500"
-            >
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </label>
-
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-emerald-500 px-5 py-4 font-bold text-slate-950 transition hover:bg-emerald-400"
-          >
-            Save Changes
-          </button>
-        </form>
+            <button type="submit" className="w-full rounded-xl bg-green-600 px-5 py-4 font-bold text-white transition hover:bg-green-700">Save changes</button>
+          </form>
+        </div>
       </div>
-    </main>
+    </AppShell>
   );
 }

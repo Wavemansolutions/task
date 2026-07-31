@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const taskAdminRoles = ["super_admin", "task_manager"];
+const taskAdminRoles = ["super_admin", "admin", "task_manager"];
 
 async function requireTaskAdmin() {
   const supabase = await createClient();
@@ -139,87 +139,113 @@ export async function createTask(formData: FormData) {
 export async function updateTask(formData: FormData) {
   const { supabase } = await requireTaskAdmin();
 
-  const taskId = String(
-    formData.get("task_id") ?? "",
-  ).trim();
-  const title = String(
-    formData.get("title") ?? "",
-  ).trim();
-  const description = String(
-    formData.get("description") ?? "",
-  ).trim();
-  const rewardAmount = Number(
-    formData.get("reward_amount") ??
-      formData.get("reward") ??
-      0,
-  );
-  const status = String(
-    formData.get("status") ?? "draft",
-  ).trim();
+  const taskId = String(formData.get("task_id") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const instructions = String(formData.get("instructions") ?? "").trim();
+  const platform = String(formData.get("platform") ?? "general").trim();
+  const type = String(formData.get("taskType") ?? formData.get("type") ?? "general").trim();
+  const taskUrl = String(formData.get("taskUrl") ?? formData.get("task_url") ?? "").trim();
+  const rewardAmount = Number(formData.get("rewardAmount") ?? formData.get("reward_amount") ?? 0);
+  const totalSlots = Number(formData.get("totalSlots") ?? formData.get("total_slots") ?? 1);
+  const proofInstructions = String(formData.get("proofInstructions") ?? formData.get("proof_instructions") ?? "").trim();
+  const status = String(formData.get("status") ?? "draft").trim();
 
-  if (!taskId || !title || !description) {
-    redirect(
-      "/admin/tasks?error=" +
-        encodeURIComponent(
-          "Task ID, title, and description are required.",
-        ),
-    );
+  if (!taskId || !title || !description || !instructions) {
+    redirect(`/admin/tasks/${taskId}/edit?error=${encodeURIComponent("Title, description, and instructions are required.")}`);
   }
+  if (!Number.isFinite(rewardAmount) || rewardAmount <= 0) {
+    redirect(`/admin/tasks/${taskId}/edit?error=${encodeURIComponent("Enter a valid reward amount.")}`);
+  }
+  if (!Number.isInteger(totalSlots) || totalSlots < 1) {
+    redirect(`/admin/tasks/${taskId}/edit?error=${encodeURIComponent("Worker slots must be at least 1.")}`);
+  }
+
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("total_slots,slots_available")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  const previousTotal = Number(current?.total_slots ?? totalSlots);
+  const previousAvailable = Number(current?.slots_available ?? previousTotal);
+  const alreadyUsed = Math.max(previousTotal - previousAvailable, 0);
+  const slotsAvailable = Math.max(totalSlots - alreadyUsed, 0);
 
   const { error } = await supabase
     .from("tasks")
     .update({
       title,
       description,
+      instructions,
+      platform: platform || "general",
+      type: type || "general",
+      task_url: taskUrl || null,
       reward_amount: rewardAmount,
+      total_slots: totalSlots,
+      slots_available: slotsAvailable,
+      proof_instructions: proofInstructions || null,
       status,
       updated_at: new Date().toISOString(),
     })
     .eq("id", taskId);
 
   if (error) {
-    redirect(
-      "/admin/tasks/" +
-        taskId +
-        "/edit?error=" +
-        encodeURIComponent(error.message),
-    );
+    redirect(`/admin/tasks/${taskId}/edit?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/admin/tasks");
+  revalidatePath(`/admin/tasks/${taskId}/edit`);
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/dashboard");
+  redirect(`/admin/tasks?message=${encodeURIComponent("Task updated successfully.")}`);
+}
+
+export async function setTaskStatus(formData: FormData) {
+  const { supabase } = await requireTaskAdmin();
+  const taskId = String(formData.get("task_id") ?? "").trim();
+  const status = String(formData.get("status") ?? "").trim();
+
+  if (!taskId || !["active", "paused"].includes(status)) {
+    redirect(`/admin/tasks?error=${encodeURIComponent("Invalid task or status.")}`);
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", taskId);
+
+  if (error) {
+    redirect(`/admin/tasks?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/tasks");
-  redirect(
-    "/admin/tasks?message=" +
-      encodeURIComponent(
-        "Task updated successfully.",
-      ),
-  );
+  revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/dashboard");
+  redirect(`/admin/tasks?message=${encodeURIComponent(status === "active" ? "Task resumed successfully." : "Task suspended successfully.")}`);
 }
 
 export async function deleteTask(formData: FormData) {
   const { supabase } = await requireTaskAdmin();
-  const taskId = String(
-    formData.get("task_id") ?? "",
-  ).trim();
+  const taskId = String(formData.get("task_id") ?? "").trim();
 
-  const { error } = await supabase
-    .from("tasks")
-    .delete()
-    .eq("id", taskId);
+  if (!taskId) {
+    redirect(`/admin/tasks?error=${encodeURIComponent("Task ID is required.")}`);
+  }
+
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 
   if (error) {
-    redirect(
-      "/admin/tasks?error=" +
-        encodeURIComponent(error.message),
-    );
+    const message = /foreign key|violates/i.test(error.message)
+      ? "This task already has worker activity and cannot be permanently deleted. Suspend it instead."
+      : error.message;
+    redirect(`/admin/tasks?error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/tasks");
-  redirect(
-    "/admin/tasks?message=" +
-      encodeURIComponent(
-        "Task deleted successfully.",
-      ),
-  );
+  revalidatePath("/dashboard");
+  redirect(`/admin/tasks?message=${encodeURIComponent("Task deleted successfully.")}`);
 }
