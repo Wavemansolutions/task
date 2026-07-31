@@ -1,5 +1,202 @@
 'use client';
-import Link from 'next/link'; import {usePathname} from 'next/navigation'; import {FiBriefcase,FiCheckSquare,FiDollarSign,FiGrid,FiHeadphones,FiHome,FiPlusCircle,FiSettings,FiUsers,FiWallet,FiX} from 'react-icons/fi';
-const main=[['/dashboard','Dashboard',FiHome],['/tasks','Tasks',FiBriefcase],['/my-tasks','My Tasks',FiCheckSquare],['/earnings','Earnings',FiDollarSign],['/wallet','Wallet',FiWallet],['/support','Support',FiHeadphones]] as const;
-const admin=[['/admin','Overview',FiGrid],['/admin/users','Users',FiUsers],['/admin/tasks','Tasks',FiBriefcase],['/admin/tasks/new','Create Task',FiPlusCircle],['/admin/finance/withdrawals','Withdrawals',FiDollarSign],['/admin/settings','Settings',FiSettings]] as const;
-export function Sidebar({open,onClose}:{open:boolean;onClose:()=>void}){const p=usePathname(); const Nav=({x}:{x:readonly [string,string,any]})=>{const I=x[2],active=p===x[0]||p.startsWith(x[0]+'/');return <Link href={x[0]} onClick={onClose} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active?'bg-green-600 text-white':'text-slate-300 hover:bg-white/10'}`}><I className="h-5 w-5"/>{x[1]}</Link>}; return <><button onClick={onClose} className={`fixed inset-0 z-40 bg-black/40 lg:hidden ${open?'block':'hidden'}`}/><aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#071421] text-white transition-transform lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'}`}><div className="flex h-20 items-center justify-between border-b border-white/10 px-5"><Link href="/dashboard" className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-green-500 text-xl font-black">₦</div><div><div className="font-extrabold">Task Money</div><div className="text-xs text-slate-400">Earn by completing tasks</div></div></Link><button onClick={onClose} className="lg:hidden"><FiX/></button></div><div className="flex-1 overflow-y-auto px-3 py-5"><p className="mb-2 px-3 text-[11px] uppercase tracking-widest text-slate-500">Main</p><nav className="space-y-1">{main.map((x)=><Nav key={x[0]} x={x}/>)}</nav><p className="mb-2 mt-7 px-3 text-[11px] uppercase tracking-widest text-slate-500">Admin</p><nav className="space-y-1">{admin.map((x)=><Nav key={x[0]} x={x}/>)}</nav></div><div className="border-t border-white/10 p-4"><div className="rounded-2xl bg-white/10 p-3"><p className="text-sm font-semibold">John Admin</p><p className="text-xs text-slate-400">super_admin</p></div></div></aside></>}
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  FiActivity,
+  FiBarChart2,
+  FiBriefcase,
+  FiCheckSquare,
+  FiCreditCard,
+  FiDollarSign,
+  FiGrid,
+  FiHeadphones,
+  FiHome,
+  FiPlusCircle,
+  FiShield,
+  FiUsers,
+  FiX,
+} from 'react-icons/fi';
+import {
+  FaFacebook,
+  FaInstagram,
+  FaLinkedin,
+  FaTelegram,
+  FaTiktok,
+  FaWhatsapp,
+  FaYoutube,
+} from 'react-icons/fa';
+import { FaXTwitter } from 'react-icons/fa6';
+
+const mainLinks = [
+  ['/dashboard', 'Dashboard', FiHome],
+  ['/tasks', 'Tasks', FiBriefcase],
+  ['/my-tasks', 'My Tasks', FiCheckSquare],
+  ['/earnings', 'Earnings', FiDollarSign],
+  ['/wallet', 'Wallet', FiCreditCard],
+  ['/referrals', 'Referrals', FiUsers],
+  ['/support', 'Support', FiHeadphones],
+] as const;
+
+const adminLinks = [
+  ['/admin', 'Overview', FiGrid],
+  ['/admin/users', 'Users', FiUsers],
+  ['/admin/tasks', 'Tasks', FiBriefcase],
+  ['/admin/tasks/new', 'Create Task', FiPlusCircle],
+  ['/admin/proofs', 'Proofs', FiShield],
+  ['/admin/finance/withdrawals', 'Withdrawals', FiDollarSign],
+  ['/admin/analytics', 'Analytics', FiBarChart2],
+  ['/admin/activity', 'Activity', FiActivity],
+] as const;
+
+type NavigationItem = readonly [
+  string,
+  string,
+  React.ComponentType<{ className?: string }>
+];
+
+export function Sidebar({
+  open,
+  onClose,
+  userName,
+  userRole,
+  isAdmin,
+}: {
+  open: boolean;
+  onClose: () => void;
+  userName: string;
+  userRole: string;
+  isAdmin: boolean;
+}) {
+  const pathname = usePathname();
+
+  const renderLink = (item: NavigationItem) => {
+    const [href, label, Icon] = item;
+
+    const active =
+      pathname === href ||
+      (href !== '/admin' && pathname.startsWith(`${href}/`));
+
+    return (
+      <Link
+        key={href}
+        href={href}
+        onClick={onClose}
+        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+          active
+            ? 'bg-green-600 text-white shadow-sm shadow-green-950/20'
+            : 'text-slate-300 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        <Icon className="h-5 w-5" />
+        <span>{label}</span>
+      </Link>
+    );
+  };
+
+  const initials =
+    userName.trim().slice(0, 2).toUpperCase() || 'TM';
+
+  const displayRole =
+    userRole?.replaceAll('_', ' ') || 'worker';
+
+  return (
+    <>
+      {open ? (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/45 lg:hidden"
+        />
+      ) : null}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#071421] text-white shadow-2xl transition-transform lg:translate-x-0 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex h-20 items-center justify-between border-b border-white/10 px-5">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-green-300 to-green-600 text-xl font-black shadow-lg shadow-green-900/30">
+              ₦
+            </div>
+
+            <div>
+              <div className="text-lg font-extrabold">
+                Task Money
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                Complete tasks. Earn.
+              </div>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={onClose}
+            className="rounded-lg p-2 hover:bg-white/10 lg:hidden"
+          >
+            <FiX className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="tm-scrollbar flex-1 overflow-y-auto px-3 py-5">
+          <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            Main
+          </p>
+
+          <nav className="space-y-1">
+            {mainLinks.map(renderLink)}
+          </nav>
+
+          {isAdmin ? (
+            <>
+              <p className="mb-2 mt-7 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Admin
+              </p>
+
+              <nav className="space-y-1">
+                {adminLinks.map(renderLink)}
+              </nav>
+            </>
+          ) : null}
+        </div>
+
+        <div className="border-t border-white/10 p-4">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl bg-white/10 p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-black text-slate-700">
+              {initials}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">
+                {userName || 'Task Money User'}
+              </p>
+
+              <p className="truncate text-xs capitalize text-slate-400">
+                {displayRole}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-lg text-slate-300">
+            <FaFacebook />
+            <FaXTwitter />
+            <FaInstagram />
+            <FaYoutube />
+            <FaTiktok />
+            <FaTelegram />
+            <FaWhatsapp />
+            <FaLinkedin />
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
