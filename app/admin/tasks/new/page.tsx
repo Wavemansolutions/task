@@ -178,7 +178,7 @@ export default async function CreateTaskPage({
               </div>
               <div className="mt-5 rounded-2xl border border-dashed border-green-300 bg-green-50 p-5">
                 <p className="text-sm font-black text-green-900">Thumbnail behavior</p>
-                <p className="mt-1 text-xs leading-5 text-green-800">When no custom thumbnail URL is supplied, Task Money will use the selected platform to style the task card automatically.</p>
+                <p className="mt-1 text-xs leading-5 text-green-800">When no custom thumbnail URL is supplied, Task Money automatically uses the generated thumbnail for the selected platform. The same thumbnail appears on the task card and full task-details page.</p>
               </div>
             </FormSection>
 
