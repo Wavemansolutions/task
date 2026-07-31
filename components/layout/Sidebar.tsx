@@ -1,5 +1,5 @@
 'use client';
-
+import { FiMonitor } from 'react-icons/fi';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -39,6 +39,11 @@ const mainLinks = [
 ] as const;
 
 const adminLinks = [
+  [
+  '/admin/devices',
+  'User Devices',
+  FiMonitor,
+],
   ['/admin', 'Overview', FiGrid],
   ['/admin/users', 'Users', FiUsers],
   ['/admin/tasks', 'Tasks', FiBriefcase],
