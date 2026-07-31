@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { Footer } from './Footer';
@@ -17,6 +18,8 @@ export function AppShell({
   isAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const effectiveIsAdmin = isAdmin || pathname.startsWith('/admin');
 
   return (
     <div className="min-h-screen bg-[#f5f7f9]">
@@ -25,7 +28,7 @@ export function AppShell({
         onClose={() => setOpen(false)}
         userName={userName}
         userRole={userRole}
-        isAdmin={isAdmin}
+        isAdmin={effectiveIsAdmin}
       />
       <div className="lg:pl-64">
         <Topbar

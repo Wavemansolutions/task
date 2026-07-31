@@ -55,6 +55,12 @@ export async function createTaskAction(formData: FormData) {
   const taskUrl = getText(formData, 'task_url');
   const proofType = getText(formData, 'proof_type');
   const status = getText(formData, 'status');
+  const socialPlatform = getText(formData, 'social_platform');
+  const thumbnailUrl = getText(formData, 'thumbnail_url');
+  const category = getText(formData, 'category');
+  const proofInstructions = getText(formData, 'proof_instructions');
+  const bannerHeadline = getText(formData, 'banner_headline');
+  const adminNote = getText(formData, 'admin_note');
 
   const rewardAmount = Number(
     formData.get('reward_amount')
@@ -63,6 +69,11 @@ export async function createTaskAction(formData: FormData) {
   const totalSlots = Number(
     formData.get('total_slots')
   );
+
+  const reservationMinutes = Number(formData.get('reservation_minutes') || 0);
+  const minimumTrustScore = Number(formData.get('minimum_trust_score') || 0);
+  const maxProofFiles = Number(formData.get('max_proof_files') || 1);
+  const requireUniqueProof = formData.get('require_unique_proof') === 'true';
 
   const startsAt = getText(formData, 'starts_at');
   const endsAt = getText(formData, 'ends_at');
@@ -145,28 +156,45 @@ export async function createTaskAction(formData: FormData) {
     );
   }
 
-  const { error: taskError } = await supabase
-    .from('tasks')
-    .insert({
-      campaign_id: campaign.id,
-      title,
-      description,
-      instructions: instructions || null,
-      type,
-      task_url: taskUrl || null,
-      proof_type: proofType,
-      reward_amount: rewardAmount,
-      total_slots: totalSlots,
-      slots_available: totalSlots,
-      status,
-      starts_at: startsAt
-        ? new Date(startsAt).toISOString()
-        : null,
-      ends_at: endsAt
-        ? new Date(endsAt).toISOString()
-        : null,
-      created_by: user.id,
-    });
+  const baseTask = {
+    campaign_id: campaign.id,
+    title,
+    description,
+    instructions: instructions || null,
+    type,
+    task_url: taskUrl || null,
+    proof_type: proofType,
+    reward_amount: rewardAmount,
+    total_slots: totalSlots,
+    slots_available: totalSlots,
+    status,
+    starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+    ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+    created_by: user.id,
+  };
+
+  const enhancedTask = {
+    ...baseTask,
+    social_platform: socialPlatform || null,
+    thumbnail_url: thumbnailUrl || null,
+    category: category || null,
+    proof_instructions: proofInstructions || null,
+    banner_headline: bannerHeadline || null,
+    admin_note: adminNote || null,
+    reservation_minutes: reservationMinutes > 0 ? reservationMinutes : null,
+    minimum_trust_score: minimumTrustScore > 0 ? minimumTrustScore : 0,
+    max_proof_files: maxProofFiles > 0 ? maxProofFiles : 1,
+    require_unique_proof: requireUniqueProof,
+  };
+
+  let { error: taskError } = await supabase.from('tasks').insert(enhancedTask);
+
+  // Older Task Money databases may not yet contain the optional UI columns.
+  // Retry with the established core schema instead of crashing task creation.
+  if (taskError && /column .* does not exist|schema cache/i.test(taskError.message)) {
+    const retry = await supabase.from('tasks').insert(baseTask);
+    taskError = retry.error;
+  }
 
   if (taskError) {
     console.error('TASK_CREATE_ERROR', taskError);
