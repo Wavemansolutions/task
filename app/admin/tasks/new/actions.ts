@@ -137,6 +137,7 @@ export async function createTaskAction(formData: FormData) {
       .from('campaigns')
       .insert({
         name: title,
+        title,
         description,
         owner_id: user.id,
         created_by: user.id,
