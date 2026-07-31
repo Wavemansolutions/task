@@ -1,81 +1,56 @@
-import Link from "next/link";
-import { createSupportTicket } from "@/app/support/actions";
+import { AppShell } from '@/components/layout/AppShell';
+import { PageHeader } from '@/components/ui/PageHeader';
+import Link from 'next/link';
+import { FiArrowLeft, FiSend } from 'react-icons/fi';
 
-type NewSupportPageProps = {
-  searchParams: Promise<{
-    error?: string;
-  }>;
-};
-
-export default async function NewSupportPage({
-  searchParams,
-}: NewSupportPageProps) {
-  const query = await searchParams;
-
+export default function NewSupportTicketPage() {
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-8 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">
-            Create Support Ticket
-          </h1>
-          <Link href="/support" className="text-emerald-400">
-            Back
-          </Link>
-        </header>
+    <AppShell>
+      <div className="mx-auto max-w-3xl">
+        <PageHeader
+          eyebrow="Help centre"
+          title="Create Support Ticket"
+          description="Explain the problem clearly so the support team can assist."
+          action={
+            <Link href="/support" className="flex items-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-bold">
+              <FiArrowLeft /> Back
+            </Link>
+          }
+        />
 
-        {query.error ? (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-            {query.error}
-          </div>
-        ) : null}
+        <form className="space-y-5 rounded-3xl border bg-white p-6 shadow-sm">
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold">Category</span>
+            <select className="w-full rounded-xl border px-4 py-3">
+              <option>Task problem</option>
+              <option>Proof problem</option>
+              <option>Wallet problem</option>
+              <option>Withdrawal problem</option>
+              <option>Account problem</option>
+              <option>General enquiry</option>
+            </select>
+          </label>
 
-        <form
-          action={createSupportTicket}
-          className="space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6"
-        >
-          <input
-            name="subject"
-            required
-            placeholder="Ticket subject"
-            className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3"
-          />
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold">Subject</span>
+            <input className="w-full rounded-xl border px-4 py-3" placeholder="Brief summary of the issue" />
+          </label>
 
-          <select
-            name="category"
-            className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3"
-          >
-            <option value="general">General</option>
-            <option value="task">Task</option>
-            <option value="proof">Proof</option>
-            <option value="wallet">Wallet</option>
-            <option value="withdrawal">Withdrawal</option>
-            <option value="account">Account</option>
-          </select>
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold">Message</span>
+            <textarea rows={7} className="w-full rounded-xl border px-4 py-3" placeholder="Describe what happened..." />
+          </label>
 
-          <select
-            name="priority"
-            className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3"
-          >
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold">Attachment</span>
+            <input type="file" className="w-full rounded-xl border px-4 py-3" />
+          </label>
 
-          <textarea
-            name="message"
-            rows={7}
-            required
-            placeholder="Describe the issue clearly"
-            className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3"
-          />
-
-          <button className="w-full rounded-xl bg-emerald-500 px-5 py-3 font-bold text-slate-950">
-            Submit Ticket
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-bold text-white">
+            <FiSend /> Submit Ticket
           </button>
         </form>
       </div>
-    </main>
+    </AppShell>
   );
 }
