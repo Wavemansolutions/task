@@ -85,7 +85,7 @@ export default async function CreateTaskPage({
                   <textarea name="description" required rows={4} placeholder="Describe exactly what workers must do." className={textAreaClass} />
                 </Field>
                 <Field label="Step-by-step instructions">
-                  <textarea name="instructions" rows={5} placeholder={'1. Open the task link\n2. Complete the action\n3. Capture the required proof'} className={textAreaClass} />
+                  <textarea name="instructions" required rows={5} placeholder={'1. Open the task link\n2. Complete the action\n3. Capture the required proof'} className={textAreaClass} />
                 </Field>
                 <Field label="Task destination link">
                   <input name="task_url" type="url" placeholder="https://example.com/post" className={inputClass} />

@@ -94,6 +94,14 @@ export async function createTaskAction(formData: FormData) {
     );
   }
 
+  if (!instructions) {
+    redirect(
+      `/admin/tasks/new?error=${encodeURIComponent(
+        'Task instructions are required.'
+      )}`
+    );
+  }
+
   if (
     !Number.isFinite(rewardAmount) ||
     rewardAmount <= 0
@@ -162,7 +170,7 @@ export async function createTaskAction(formData: FormData) {
     campaign_id: campaign.id,
     title,
     description,
-    instructions: instructions || null,
+    instructions,
     type,
     task_url: taskUrl || null,
     proof_type: proofType,
