@@ -1,16 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Webhook } from "standardwebhooks";
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server';
 
-import { sendSms } from "@/lib/sms/send-sms";
+import { Webhook } from 'standardwebhooks';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+import { sendSms } from '@/lib/sms/send-sms';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 type SupabaseSmsHookPayload = {
   user?: {
     id?: string;
     phone?: string;
   };
+
   sms?: {
     otp?: string;
   };
@@ -18,51 +23,75 @@ type SupabaseSmsHookPayload = {
 
 function getWebhookSecret(): string {
   const secret =
-    process.env.SUPABASE_SEND_SMS_HOOK_SECRET;
+    process.env
+      .SUPABASE_SEND_SMS_HOOK_SECRET
+      ?.trim();
 
   if (!secret) {
     throw new Error(
-      "SUPABASE_SEND_SMS_HOOK_SECRET is missing.",
+      'SUPABASE_SEND_SMS_HOOK_SECRET is missing.',
     );
   }
 
   return secret;
 }
 
-function formatOtpMessage(otp: string): string {
-  return [
-    `Your Task Money verification code is ${otp}.`,
-    "It expires shortly.",
-    "Do not share this code with anyone.",
-  ].join(" ");
+function formatOtpMessage(
+  otp: string,
+): string {
+  return (
+    `Your Task Money verification code is ${otp}. ` +
+    'It expires shortly. Do not share this code with anyone.'
+  );
+}
+
+export async function GET() {
+  return NextResponse.json(
+    {
+      status: 'ok',
+      service:
+        'Task Money KudiSMS hook',
+      provider: 'KudiSMS',
+      accepts: ['POST'],
+    },
+    {
+      status: 200,
+    },
+  );
 }
 
 export async function POST(
   request: NextRequest,
 ) {
-  const rawBody = await request.text();
+  const rawBody =
+    await request.text();
 
   try {
-    const webhook = new Webhook(
-      getWebhookSecret(),
-    );
+    const webhook =
+      new Webhook(
+        getWebhookSecret(),
+      );
 
-    const payload = webhook.verify(
-      rawBody,
-      {
-        "webhook-id":
-          request.headers.get("webhook-id") ??
-          "",
-        "webhook-timestamp":
-          request.headers.get(
-            "webhook-timestamp",
-          ) ?? "",
-        "webhook-signature":
-          request.headers.get(
-            "webhook-signature",
-          ) ?? "",
-      },
-    ) as SupabaseSmsHookPayload;
+    const payload =
+      webhook.verify(
+        rawBody,
+        {
+          'webhook-id':
+            request.headers.get(
+              'webhook-id',
+            ) ?? '',
+
+          'webhook-timestamp':
+            request.headers.get(
+              'webhook-timestamp',
+            ) ?? '',
+
+          'webhook-signature':
+            request.headers.get(
+              'webhook-signature',
+            ) ?? '',
+        },
+      ) as SupabaseSmsHookPayload;
 
     const phone =
       payload.user?.phone?.trim();
@@ -76,7 +105,7 @@ export async function POST(
           error: {
             http_code: 400,
             message:
-              "SMS hook did not contain a phone number.",
+              'The hook request did not contain a phone number.',
           },
         },
         {
@@ -85,13 +114,16 @@ export async function POST(
       );
     }
 
-    if (!otp || !/^\d{6,10}$/.test(otp)) {
+    if (
+      !otp ||
+      !/^\d{6,10}$/.test(otp)
+    ) {
       return NextResponse.json(
         {
           error: {
             http_code: 400,
             message:
-              "SMS hook did not contain a valid OTP.",
+              'The hook request did not contain a valid OTP.',
           },
         },
         {
@@ -100,17 +132,24 @@ export async function POST(
       );
     }
 
-    const delivery = await sendSms({
-      phone,
-      message: formatOtpMessage(otp),
-    });
+    const result =
+      await sendSms({
+        phone,
+        message:
+          formatOtpMessage(otp),
+      });
 
-    if (!delivery.success) {
+    if (!result.success) {
       console.error(
-        "TASK_MONEY_SMS_DELIVERY_ERROR",
+        'KUDISMS_DELIVERY_ERROR',
         {
-          phoneLastFour: phone.slice(-4),
-          error: delivery.error,
+          phoneLastFour:
+            phone.slice(-4),
+
+          error: result.error,
+
+          providerResponse:
+            result.providerResponse,
         },
       );
 
@@ -119,7 +158,8 @@ export async function POST(
           error: {
             http_code: 502,
             message:
-              "The verification message could not be sent.",
+              result.error ||
+              'The verification SMS could not be sent.',
           },
         },
         {
@@ -128,12 +168,27 @@ export async function POST(
       );
     }
 
-    return new NextResponse(null, {
-      status: 200,
-    });
-  } catch (error) {
+    console.info(
+      'KUDISMS_DELIVERY_ACCEPTED',
+      {
+        phoneLastFour:
+          phone.slice(-4),
+
+        providerMessageId:
+          result.providerMessageId ??
+          null,
+      },
+    );
+
+    return new NextResponse(
+      null,
+      {
+        status: 200,
+      },
+    );
+  } catch (error: unknown) {
     console.error(
-      "TASK_MONEY_SMS_HOOK_ERROR",
+      'TASK_MONEY_SMS_HOOK_ERROR',
       error instanceof Error
         ? error.message
         : error,
@@ -144,7 +199,7 @@ export async function POST(
         error: {
           http_code: 401,
           message:
-            "Invalid SMS-hook request.",
+            'Invalid SMS-hook request.',
         },
       },
       {
