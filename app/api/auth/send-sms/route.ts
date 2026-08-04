@@ -34,13 +34,12 @@ function getWebhookSecret(): string {
   }
 
   /*
-   * Supabase may display the hook secret as:
+   * Supabase may display the secret as:
    *
    * v1,whsec_xxxxx
-   * or
    * whsec_xxxxx
    *
-   * standardwebhooks expects only the Base64 secret value.
+   * standardwebhooks needs only the encoded secret.
    */
   const normalizedSecret = rawSecret
     .replace(/^v1,whsec_/, '')
@@ -69,18 +68,14 @@ function jsonResponse(
   body: Record<string, unknown>,
   status: number,
 ) {
-  return NextResponse.json(
-    body,
-    {
-      status,
-      headers: {
-        'Content-Type':
-          'application/json; charset=utf-8',
-        'Cache-Control':
-          'no-store',
-      },
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      'Content-Type':
+        'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
-  );
+  });
 }
 
 export async function GET() {
@@ -99,6 +94,38 @@ export async function GET() {
 export async function POST(
   request: NextRequest,
 ) {
+  console.info(
+    'TASK_MONEY_SMS_HOOK_POST_RECEIVED',
+    {
+      time: new Date().toISOString(),
+
+      contentType:
+        request.headers.get(
+          'content-type',
+        ),
+
+      hasWebhookId: Boolean(
+        request.headers.get(
+          'webhook-id',
+        ),
+      ),
+
+      hasWebhookTimestamp:
+        Boolean(
+          request.headers.get(
+            'webhook-timestamp',
+          ),
+        ),
+
+      hasWebhookSignature:
+        Boolean(
+          request.headers.get(
+            'webhook-signature',
+          ),
+        ),
+    },
+  );
+
   const contentType =
     request.headers.get(
       'content-type',
@@ -109,6 +136,14 @@ export async function POST(
       .toLowerCase()
       .includes('application/json')
   ) {
+    console.error(
+      'TASK_MONEY_SMS_INVALID_CONTENT_TYPE',
+      {
+        contentType:
+          contentType || null,
+      },
+    );
+
     return jsonResponse(
       {
         error: {
@@ -125,6 +160,10 @@ export async function POST(
     await request.text();
 
   if (!rawBody.trim()) {
+    console.error(
+      'TASK_MONEY_SMS_EMPTY_BODY',
+    );
+
     return jsonResponse(
       {
         error: {
@@ -164,6 +203,23 @@ export async function POST(
         },
       ) as SupabaseSmsHookPayload;
 
+    console.info(
+      'TASK_MONEY_SMS_SIGNATURE_VERIFIED',
+      {
+        hasUserId: Boolean(
+          payload.user?.id,
+        ),
+
+        hasPhone: Boolean(
+          payload.user?.phone,
+        ),
+
+        hasOtp: Boolean(
+          payload.sms?.otp,
+        ),
+      },
+    );
+
     const phone =
       payload.user?.phone?.trim();
 
@@ -171,6 +227,10 @@ export async function POST(
       payload.sms?.otp?.trim();
 
     if (!phone) {
+      console.error(
+        'TASK_MONEY_SMS_PHONE_MISSING',
+      );
+
       return jsonResponse(
         {
           error: {
@@ -187,6 +247,14 @@ export async function POST(
       !otp ||
       !/^\d{6,10}$/.test(otp)
     ) {
+      console.error(
+        'TASK_MONEY_SMS_OTP_INVALID',
+        {
+          phoneLastFour:
+            phone.slice(-4),
+        },
+      );
+
       return jsonResponse(
         {
           error: {
@@ -225,6 +293,7 @@ export async function POST(
         {
           error: {
             http_code: 502,
+
             message:
               result.error ||
               'The verification SMS could not be sent.',
@@ -265,6 +334,7 @@ export async function POST(
       {
         error: {
           http_code: 401,
+
           message:
             'The SMS hook signature could not be verified.',
         },
