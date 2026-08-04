@@ -155,7 +155,7 @@ export async function sendSms({
    */
   if (
     process.env.SMS_DEVELOPMENT_MODE ===
-    'true'
+    'false'
   ) {
     console.log(
       'TASK_MONEY_DEVELOPMENT_SMS',
