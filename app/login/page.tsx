@@ -1,123 +1,40 @@
 'use client';
 
-import {
-  FormEvent,
-  useMemo,
-  useState,
-} from 'react';
 import Link from 'next/link';
+import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FiArrowLeft,
-  FiCheckCircle,
+  FiEye,
+  FiEyeOff,
+  FiLock,
+  FiMail,
   FiPhone,
-  FiRefreshCw,
-  FiShield,
   FiUser,
 } from 'react-icons/fi';
 
-import { normalizeNigerianPhone } from '@/lib/phone';
 import { createClient } from '@/utils/supabase/client';
 
-type LoginStage = 'phone' | 'otp';
+type AuthMode = 'login' | 'register';
 
-type UnknownErrorRecord = {
-  message?: unknown;
-  error?: unknown;
-  error_description?: unknown;
-  msg?: unknown;
-  details?: unknown;
-  code?: unknown;
-  status?: unknown;
-};
-
-function getAuthErrorMessage(
-  error: unknown,
-  fallback: string,
-): string {
-  if (error instanceof Error) {
-    const message = error.message?.trim();
-
-    if (message && message !== '{}') {
-      return message;
-    }
-
-    return fallback;
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
   }
 
   if (typeof error === 'string') {
-    const message = error.trim();
-
-    if (!message || message === '{}') {
-      return fallback;
-    }
-
-    try {
-      const parsed = JSON.parse(message) as unknown;
-
-      if (parsed !== message) {
-        return getAuthErrorMessage(parsed, fallback);
-      }
-    } catch {
-      // The value is plain text, not JSON.
-    }
-
-    return message;
+    return error;
   }
 
-  if (
-    typeof error === 'object' &&
-    error !== null
-  ) {
-    const record =
-      error as UnknownErrorRecord;
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>;
 
-    const possibleMessages = [
-      record.message,
-      record.error_description,
-      record.error,
-      record.msg,
-      record.details,
-    ];
+    for (const key of ['message', 'error', 'error_description']) {
+      const value = record[key];
 
-    for (const possibleMessage of possibleMessages) {
-      if (typeof possibleMessage === 'string') {
-        const message = possibleMessage.trim();
-
-        if (message && message !== '{}') {
-          return message;
-        }
+      if (typeof value === 'string' && value.trim()) {
+        return value;
       }
-    }
-
-    const details = [
-      record.code
-        ? `Code: ${String(record.code)}`
-        : null,
-
-      record.status
-        ? `Status: ${String(record.status)}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-
-    if (details) {
-      return `Unable to process the OTP request. ${details}`;
-    }
-
-    try {
-      const serialized =
-        JSON.stringify(error);
-
-      if (
-        serialized &&
-        serialized !== '{}'
-      ) {
-        return serialized;
-      }
-    } catch {
-      // Ignore serialization failure.
     }
   }
 
@@ -126,588 +43,361 @@ function getAuthErrorMessage(
 
 export default function LoginPage() {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
-  const supabase = useMemo(
-    () => createClient(),
-    [],
-  );
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [stage, setStage] =
-    useState<LoginStage>('phone');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const [fullName, setFullName] =
-    useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
-  const [phoneInput, setPhoneInput] =
-    useState('');
+  function switchMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setError('');
+    setMessage('');
+    setPassword('');
+  }
 
-  const [
-    normalizedPhone,
-    setNormalizedPhone,
-  ] = useState('');
-
-  const [otp, setOtp] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [message, setMessage] =
-    useState('');
-
-  const [error, setError] =
-    useState('');
-
-  async function sendOtp(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setLoading(true);
-    setMessage('');
     setError('');
+    setMessage('');
 
     try {
-      const trimmedName =
-        fullName.trim();
+      const normalizedEmail = email.trim().toLowerCase();
 
-      if (trimmedName.length < 2) {
+      if (!normalizedEmail || !password) {
+        throw new Error('Enter your email and password.');
+      }
+
+      const { error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+
+      if (signInError) {
+        throw new Error(signInError.message);
+      }
+
+      router.replace('/dashboard');
+      router.refresh();
+    } catch (loginError: unknown) {
+      setError(
+        errorMessage(
+          loginError,
+          'Unable to sign in. Check your email and password.',
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName,
+          email,
+          phone,
+          password,
+        }),
+      });
+
+      const result = (await response.json()) as {
+        error?: string;
+        message?: string;
+        requiresEmailConfirmation?: boolean;
+      };
+
+      if (!response.ok) {
         throw new Error(
-          'Enter your full name.',
+          result.error || 'Registration could not be completed.',
         );
       }
 
-      const phone =
-        normalizeNigerianPhone(
-          phoneInput,
-        );
-
-      console.info(
-        'REQUESTING_PHONE_OTP',
-        {
-          phoneLastFour:
-            phone.slice(-4),
-        },
+      setMessage(
+        result.message ||
+          'Account created. Check your email to confirm your account.',
       );
 
-      const {
-        data,
-        error: otpError,
-      } =
-        await supabase.auth.signInWithOtp(
-          {
-            phone,
-
-            options: {
-              shouldCreateUser: true,
-
-              data: {
-                full_name:
-                  trimmedName,
-              },
-            },
-          },
-        );
-
-      console.info(
-        'PHONE_OTP_REQUEST_RESULT',
-        {
-          hasData: Boolean(data),
-
-          errorMessage:
-            otpError?.message ?? null,
-
-          errorCode:
-            otpError?.code ?? null,
-
-          errorStatus:
-            otpError?.status ?? null,
-        },
-      );
-
-      if (otpError) {
-        setError(
-          getAuthErrorMessage(
-            otpError,
-            'Unable to send the verification code.',
-          ),
-        );
-
+      if (!result.requiresEmailConfirmation) {
+        router.replace('/dashboard');
+        router.refresh();
         return;
       }
 
-      setNormalizedPhone(phone);
-      setOtp('');
-      setStage('otp');
-
-      setMessage(
-        `A verification code was sent to ${phone}.`,
-      );
-    } catch (sendError: unknown) {
-      console.error(
-        'SEND_PHONE_OTP_ERROR',
-        sendError,
-      );
-
+      setMode('login');
+      setPassword('');
+    } catch (registrationError: unknown) {
       setError(
-        getAuthErrorMessage(
-          sendError,
-          'Unable to send the verification code. Check the SMS gateway and try again.',
+        errorMessage(
+          registrationError,
+          'Registration could not be completed.',
         ),
       );
     } finally {
       setLoading(false);
     }
-  }
-
-  async function verifyOtp(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-
-    setLoading(true);
-    setMessage('');
-    setError('');
-
-    try {
-      if (!normalizedPhone) {
-        throw new Error(
-          'Enter your phone number again.',
-        );
-      }
-
-      if (!/^\d{6}$/.test(otp)) {
-        throw new Error(
-          'Enter the six-digit verification code.',
-        );
-      }
-
-      const {
-        data,
-        error: verifyError,
-      } =
-        await supabase.auth.verifyOtp({
-          phone:
-            normalizedPhone,
-
-          token:
-            otp,
-
-          type:
-            'sms',
-        });
-
-      if (verifyError) {
-        throw new Error(
-          verifyError.message ||
-            'The verification code is invalid or expired.',
-        );
-      }
-
-      const user =
-        data.user;
-
-      if (!user) {
-        throw new Error(
-          'Verification succeeded, but the user account could not be loaded.',
-        );
-      }
-
-      const metadataName =
-        typeof user.user_metadata
-          ?.full_name === 'string'
-          ? user.user_metadata.full_name.trim()
-          : '';
-
-      const selectedName =
-        fullName.trim() ||
-        metadataName ||
-        'Task Money User';
-
-      const {
-        error: profileError,
-      } =
-        await supabase
-          .from('profiles')
-          .upsert(
-            {
-              id:
-                user.id,
-
-              full_name:
-                selectedName,
-
-              phone:
-                normalizedPhone,
-
-              phone_verified:
-                true,
-            },
-
-            {
-              onConflict:
-                'id',
-            },
-          );
-
-      if (profileError) {
-        throw new Error(
-          profileError.message ||
-            'The verified profile could not be saved.',
-        );
-      }
-
-      router.replace(
-        '/dashboard',
-      );
-
-      router.refresh();
-    } catch (verifyError: unknown) {
-      console.error(
-        'VERIFY_PHONE_OTP_ERROR',
-        verifyError,
-      );
-
-      setError(
-        getAuthErrorMessage(
-          verifyError,
-          'The verification code could not be confirmed.',
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function resendOtp() {
-    if (!normalizedPhone) {
-      setStage('phone');
-
-      setError(
-        'Enter your phone number again.',
-      );
-
-      return;
-    }
-
-    setLoading(true);
-    setMessage('');
-    setError('');
-
-    try {
-      const {
-        error: resendError,
-      } =
-        await supabase.auth.signInWithOtp(
-          {
-            phone:
-              normalizedPhone,
-
-            options: {
-              shouldCreateUser:
-                true,
-
-              data: {
-                full_name:
-                  fullName.trim() ||
-                  null,
-              },
-            },
-          },
-        );
-
-      if (resendError) {
-        throw new Error(
-          resendError.message ||
-            'Unable to resend the verification code.',
-        );
-      }
-
-      setOtp('');
-
-      setMessage(
-        'A new verification code was sent.',
-      );
-    } catch (resendError: unknown) {
-      console.error(
-        'RESEND_PHONE_OTP_ERROR',
-        resendError,
-      );
-
-      setError(
-        getAuthErrorMessage(
-          resendError,
-          'Unable to resend the verification code.',
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function changeNumber() {
-    setStage('phone');
-    setOtp('');
-    setNormalizedPhone('');
-    setMessage('');
-    setError('');
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl lg:grid-cols-[1.1fr_.9fr]">
-        <section className="hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-green-700 p-10 lg:flex lg:flex-col lg:justify-between">
+    <main className="min-h-screen bg-slate-950 px-4 py-8">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl lg:grid-cols-[1.05fr_.95fr]">
+        <section className="hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-green-700 p-10 text-white lg:flex lg:flex-col lg:justify-between">
           <Link
             href="/"
-            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-white/80 transition hover:text-white"
+            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-white/80 hover:text-white"
           >
             <FiArrowLeft />
             Back to home
           </Link>
 
           <div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500 text-3xl font-black shadow-xl shadow-green-950/30">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500 text-3xl font-black">
               ₦
             </div>
 
-            <h1 className="mt-8 max-w-lg text-5xl font-black leading-tight">
-              Complete verified tasks and earn with Task Money.
+            <h1 className="mt-8 max-w-xl text-5xl font-black leading-tight">
+              Complete verified tasks and manage your earnings.
             </h1>
 
             <p className="mt-5 max-w-xl text-lg leading-8 text-white/75">
-              Register with a verified Nigerian phone number,
-              complete approved online tasks and receive your
-              earnings through your Task Money wallet.
+              Register with your email, password and a unique Nigerian
+              phone number. Phone SMS verification can be added back
+              after the gateway is ready.
             </p>
-
-            <div className="mt-10 space-y-4">
-              <div className="flex items-center gap-3">
-                <FiCheckCircle className="h-5 w-5 text-green-300" />
-                <span>Verified phone registration</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <FiCheckCircle className="h-5 w-5 text-green-300" />
-                <span>Real task and proof review system</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <FiCheckCircle className="h-5 w-5 text-green-300" />
-                <span>Secure wallet and withdrawal management</span>
-              </div>
-            </div>
           </div>
 
           <p className="text-xs text-white/50">
-            Your phone and device information may be recorded
-            for account security and fraud prevention.
+            Task Money may record login and device information for
+            account protection and fraud prevention.
           </p>
         </section>
 
-        <section className="flex items-center justify-center bg-white p-6 text-slate-950 sm:p-10">
+        <section className="flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
             <Link
               href="/"
-              className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 lg:hidden"
+              className="mb-7 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-950 lg:hidden"
             >
               <FiArrowLeft />
               Back to home
             </Link>
 
             <div className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-green-600 text-2xl font-black text-white shadow-lg shadow-green-600/20">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-green-600 text-2xl font-black text-white">
                 ₦
               </div>
 
-              <h2 className="mt-5 text-3xl font-black">
+              <h2 className="mt-5 text-3xl font-black text-slate-950">
                 Task Money
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                {stage === 'phone'
-                  ? 'Enter your phone number to continue.'
-                  : 'Enter the SMS verification code.'}
+                {mode === 'login'
+                  ? 'Sign in to your account.'
+                  : 'Create a new verified account.'}
               </p>
             </div>
 
-            {error ? (
-              <div
-                role="alert"
-                className="mt-6 break-words rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700"
+            <div className="mt-7 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => switchMode('login')}
+                className={`rounded-lg px-4 py-2.5 text-sm font-bold ${
+                  mode === 'login'
+                    ? 'bg-white text-slate-950 shadow-sm'
+                    : 'text-slate-500'
+                }`}
               >
+                Sign in
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchMode('register')}
+                className={`rounded-lg px-4 py-2.5 text-sm font-bold ${
+                  mode === 'register'
+                    ? 'bg-white text-slate-950 shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                Create account
+              </button>
+            </div>
+
+            {error ? (
+              <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
               </div>
             ) : null}
 
             {message ? (
-              <div
-                role="status"
-                className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-700"
-              >
+              <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
                 {message}
               </div>
             ) : null}
 
-            {stage === 'phone' ? (
-              <form
-                onSubmit={sendOtp}
-                className="mt-7 space-y-5"
-              >
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Full name
-                  </span>
+            <form
+              onSubmit={mode === 'login' ? handleLogin : handleRegister}
+              className="mt-6 space-y-5"
+            >
+              {mode === 'register' ? (
+                <>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">
+                      Full name
+                    </span>
 
-                  <div className="relative">
-                    <FiUser className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <div className="relative">
+                      <FiUser className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
-                    <input
-                      value={fullName}
-                      onChange={(event) =>
-                        setFullName(
-                          event.target.value,
-                        )
-                      }
-                      type="text"
-                      required
-                      minLength={2}
-                      autoComplete="name"
-                      placeholder="Your full name"
-                      disabled={loading}
-                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100 disabled:bg-slate-100"
-                    />
-                  </div>
-                </label>
+                      <input
+                        value={fullName}
+                        onChange={(event) =>
+                          setFullName(event.target.value)
+                        }
+                        required
+                        minLength={2}
+                        autoComplete="name"
+                        placeholder="Your full name"
+                        className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                      />
+                    </div>
+                  </label>
 
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Phone number
-                  </span>
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">
+                      Phone number
+                    </span>
 
-                  <div className="relative">
-                    <FiPhone className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                    <div className="relative">
+                      <FiPhone className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
-                    <input
-                      value={phoneInput}
-                      onChange={(event) =>
-                        setPhoneInput(
-                          event.target.value,
-                        )
-                      }
-                      type="tel"
-                      required
-                      autoComplete="tel"
-                      inputMode="tel"
-                      placeholder="08136963037"
-                      disabled={loading}
-                      className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100 disabled:bg-slate-100"
-                    />
-                  </div>
+                      <input
+                        value={phone}
+                        onChange={(event) =>
+                          setPhone(event.target.value)
+                        }
+                        type="tel"
+                        required
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="08136963037"
+                        className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                      />
+                    </div>
 
-                  <p className="mt-2 text-xs leading-5 text-slate-500">
-                    Nigerian formats such as 08136963037 and
-                    +2348136963037 are accepted.
-                  </p>
-                </label>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Each phone number can be connected to only one account.
+                    </p>
+                  </label>
+                </>
+              ) : null}
 
-                <button
-                  type="submit"
-                  disabled={
-                    loading ||
-                    !fullName.trim() ||
-                    !phoneInput.trim()
-                  }
-                  className="w-full rounded-xl bg-green-600 px-5 py-3.5 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading
-                    ? 'Sending code...'
-                    : 'Continue with phone'}
-                </button>
-              </form>
-            ) : (
-              <form
-                onSubmit={verifyOtp}
-                className="mt-7 space-y-5"
-              >
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p className="text-xs text-slate-500">
-                    Code sent to
-                  </p>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Email address
+                </span>
 
-                  <p className="mt-1 font-bold text-slate-950">
-                    {normalizedPhone}
-                  </p>
-                </div>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Six-digit OTP
-                  </span>
+                <div className="relative">
+                  <FiMail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
 
                   <input
-                    value={otp}
+                    value={email}
                     onChange={(event) =>
-                      setOtp(
-                        event.target.value
-                          .replace(/\D/g, '')
-                          .slice(0, 6),
-                      )
+                      setEmail(event.target.value)
                     }
-                    type="text"
+                    type="email"
                     required
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="123456"
-                    disabled={loading}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-4 text-center text-2xl font-black tracking-[0.45em] outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100 disabled:bg-slate-100"
+                    autoComplete="email"
+                    placeholder="name@example.com"
+                    className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
                   />
-                </label>
+                </div>
+              </label>
 
-                <button
-                  type="submit"
-                  disabled={
-                    loading ||
-                    otp.length !== 6
-                  }
-                  className="w-full rounded-xl bg-green-600 px-5 py-3.5 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading
-                    ? 'Verifying...'
-                    : 'Verify and sign in'}
-                </button>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Password
+                </span>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="relative">
+                  <FiLock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+
+                  <input
+                    value={password}
+                    onChange={(event) =>
+                      setPassword(event.target.value)
+                    }
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    autoComplete={
+                      mode === 'login'
+                        ? 'current-password'
+                        : 'new-password'
+                    }
+                    placeholder="Minimum 8 characters"
+                    className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-12 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100"
+                  />
+
                   <button
                     type="button"
-                    onClick={changeNumber}
-                    disabled={loading}
-                    className="text-sm font-semibold text-slate-600 transition hover:text-slate-950 disabled:opacity-50"
+                    onClick={() =>
+                      setShowPassword((visible) => !visible)
+                    }
+                    aria-label={
+                      showPassword ? 'Hide password' : 'Show password'
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                   >
-                    Change number
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={resendOtp}
-                    disabled={loading}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-green-700 transition hover:text-green-800 disabled:opacity-50"
-                  >
-                    <FiRefreshCw />
-                    Resend code
+                    {showPassword ? <FiEyeOff /> : <FiEye />}
                   </button>
                 </div>
-              </form>
-            )}
+              </label>
 
-            <div className="mt-8 flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
-              <FiShield className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-green-600 px-5 py-3.5 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading
+                  ? mode === 'login'
+                    ? 'Signing in...'
+                    : 'Creating account...'
+                  : mode === 'login'
+                    ? 'Sign in'
+                    : 'Create account'}
+              </button>
+            </form>
 
-              <p className="text-xs leading-5 text-slate-500">
-                Your phone number must be verified before you can
-                access tasks, wallet services or withdrawals.
+            {mode === 'login' ? (
+              <p className="mt-5 text-center text-sm text-slate-500">
+                Forgot your password? Use the password reset page once it
+                is connected.
               </p>
-            </div>
+            ) : null}
           </div>
         </section>
       </div>
