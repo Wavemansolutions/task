@@ -22,18 +22,38 @@ type SupabaseSmsHookPayload = {
 };
 
 function getWebhookSecret(): string {
-  const secret =
+  const rawSecret =
     process.env
       .SUPABASE_SEND_SMS_HOOK_SECRET
       ?.trim();
 
-  if (!secret) {
+  if (!rawSecret) {
     throw new Error(
       'SUPABASE_SEND_SMS_HOOK_SECRET is missing.',
     );
   }
 
-  return secret;
+  /*
+   * Supabase hook secrets may be shown as:
+   *
+   * v1,whsec_xxxxxxxxx
+   * or
+   * whsec_xxxxxxxxx
+   *
+   * standardwebhooks expects only the base64 secret part.
+   */
+  const normalizedSecret = rawSecret
+    .replace(/^v1,whsec_/, '')
+    .replace(/^whsec_/, '')
+    .trim();
+
+  if (!normalizedSecret) {
+    throw new Error(
+      'SUPABASE_SEND_SMS_HOOK_SECRET is invalid.',
+    );
+  }
+
+  return normalizedSecret;
 }
 
 function formatOtpMessage(
@@ -187,11 +207,14 @@ export async function POST(
       },
     );
   } catch (error: unknown) {
-    console.error(
-      'TASK_MONEY_SMS_HOOK_ERROR',
+    const message =
       error instanceof Error
         ? error.message
-        : error,
+        : 'Unknown webhook error';
+
+    console.error(
+      'TASK_MONEY_SMS_HOOK_ERROR',
+      message,
     );
 
     return NextResponse.json(
@@ -199,7 +222,7 @@ export async function POST(
         error: {
           http_code: 401,
           message:
-            'Invalid SMS-hook request.',
+            'The SMS hook signature could not be verified.',
         },
       },
       {
