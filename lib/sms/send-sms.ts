@@ -16,9 +16,7 @@ function requiredEnvironmentVariable(
   const value = process.env[name]?.trim();
 
   if (!value) {
-    throw new Error(
-      `${name} is missing.`,
-    );
+    throw new Error(`${name} is missing.`);
   }
 
   return value;
@@ -29,14 +27,17 @@ function normalizeKudiSmsNumber(
 ): string {
   const digits = rawPhone.replace(/\D/g, '');
 
+  // 08012345678
   if (/^0\d{10}$/.test(digits)) {
     return `234${digits.slice(1)}`;
   }
 
+  // 2348012345678
   if (/^234\d{10}$/.test(digits)) {
     return digits;
   }
 
+  // 8012345678
   if (/^\d{10}$/.test(digits)) {
     return `234${digits}`;
   }
@@ -46,55 +47,50 @@ function normalizeKudiSmsNumber(
   );
 }
 
-function extractProviderError(
-  responseBody: unknown,
+function getProviderMessage(
+  body: unknown,
 ): string | null {
   if (
-    typeof responseBody !== 'object' ||
-    responseBody === null
+    typeof body !== 'object' ||
+    body === null
   ) {
     return null;
   }
 
-  const record = responseBody as Record<
-    string,
-    unknown
-  >;
+  const record =
+    body as Record<string, unknown>;
 
   const candidates = [
+    record.msg,
     record.message,
     record.error,
-    record.error_message,
     record.description,
-    record.msg,
   ];
 
-  for (const value of candidates) {
+  for (const candidate of candidates) {
     if (
-      typeof value === 'string' &&
-      value.trim()
+      typeof candidate === 'string' &&
+      candidate.trim()
     ) {
-      return value;
+      return candidate;
     }
   }
 
   return null;
 }
 
-function extractMessageId(
-  responseBody: unknown,
+function getProviderMessageId(
+  body: unknown,
 ): string | undefined {
   if (
-    typeof responseBody !== 'object' ||
-    responseBody === null
+    typeof body !== 'object' ||
+    body === null
   ) {
     return undefined;
   }
 
-  const record = responseBody as Record<
-    string,
-    unknown
-  >;
+  const record =
+    body as Record<string, unknown>;
 
   const candidates = [
     record.message_id,
@@ -104,16 +100,49 @@ function extractMessageId(
     record.request_id,
   ];
 
-  for (const value of candidates) {
+  for (const candidate of candidates) {
     if (
-      typeof value === 'string' ||
-      typeof value === 'number'
+      typeof candidate === 'string' ||
+      typeof candidate === 'number'
     ) {
-      return String(value);
+      return String(candidate);
     }
   }
 
   return undefined;
+}
+
+function providerRejected(
+  body: unknown,
+): boolean {
+  if (
+    typeof body !== 'object' ||
+    body === null
+  ) {
+    return false;
+  }
+
+  const record =
+    body as Record<string, unknown>;
+
+  const status =
+    typeof record.status === 'string'
+      ? record.status.toLowerCase()
+      : '';
+
+  const errorCode =
+    typeof record.error_code === 'string'
+      ? record.error_code
+      : typeof record.error_code === 'number'
+        ? String(record.error_code)
+        : '';
+
+  return (
+    status === 'error' ||
+    status === 'failed' ||
+    record.success === false ||
+    Boolean(errorCode)
+  );
 }
 
 export async function sendSms({
@@ -121,8 +150,8 @@ export async function sendSms({
   message,
 }: SendSmsInput): Promise<SmsGatewayResponse> {
   /*
-   * Development testing only.
-   * Never enable this publicly in production.
+   * Local testing only.
+   * Keep false in production.
    */
   if (
     process.env.SMS_DEVELOPMENT_MODE ===
@@ -145,11 +174,10 @@ export async function sendSms({
 
   try {
     const apiUrl =
-      requiredEnvironmentVariable(
-        'KUDISMS_API_URL',
-      );
+      process.env.KUDISMS_API_URL?.trim() ||
+      'https://my.kudisms.net/api/sms';
 
-    const apiKey =
+    const token =
       requiredEnvironmentVariable(
         'KUDISMS_API_KEY',
       );
@@ -159,67 +187,40 @@ export async function sendSms({
         'KUDISMS_SENDER_ID',
       );
 
-    const recipient =
+    const recipients =
       normalizeKudiSmsNumber(phone);
 
-    /*
-     * These names can be changed from Vercel without
-     * modifying the source code.
-     */
-    const recipientField =
-      process.env.KUDISMS_RECIPIENT_FIELD?.trim() ||
-      'recipient';
+    const formData =
+      new URLSearchParams();
 
-    const messageField =
-      process.env.KUDISMS_MESSAGE_FIELD?.trim() ||
-      'message';
+    formData.set('token', token);
+    formData.set('senderID', senderId);
+    formData.set(
+      'recipients',
+      recipients,
+    );
+    formData.set('message', message);
 
-    const senderField =
-      process.env.KUDISMS_SENDER_FIELD?.trim() ||
-      'sender_id';
+    const response = await fetch(
+      apiUrl,
+      {
+        method: 'POST',
 
-    const apiKeyHeader =
-      process.env.KUDISMS_API_KEY_HEADER?.trim() ||
-      'Authorization';
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded',
+          Accept:
+            'application/json',
+        },
 
-    const apiKeyPrefix =
-      process.env.KUDISMS_API_KEY_PREFIX ??
-      'Bearer';
+        body: formData.toString(),
 
-    const authorizationValue =
-      apiKeyPrefix.trim()
-        ? `${apiKeyPrefix.trim()} ${apiKey}`
-        : apiKey;
+        cache: 'no-store',
 
-    const requestBody: Record<
-      string,
-      string
-    > = {
-      [recipientField]: recipient,
-      [messageField]: message,
-      [senderField]: senderId,
-    };
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-
-      headers: {
-        'Content-Type':
-          'application/json',
-        Accept: 'application/json',
-        [apiKeyHeader]:
-          authorizationValue,
+        signal:
+          AbortSignal.timeout(8000),
       },
-
-      body: JSON.stringify(
-        requestBody,
-      ),
-
-      cache: 'no-store',
-
-      signal:
-        AbortSignal.timeout(4000),
-    });
+    );
 
     const rawResponse =
       await response.text();
@@ -233,15 +234,24 @@ export async function sendSms({
           ? JSON.parse(rawResponse)
           : null;
     } catch {
-      // Keep the raw text response.
+      // Keep raw text response.
     }
+
+    console.info(
+      'KUDISMS_RAW_RESPONSE',
+      {
+        statusCode:
+          response.status,
+        responseBody,
+      },
+    );
 
     if (!response.ok) {
       return {
         success: false,
 
         error:
-          extractProviderError(
+          getProviderMessage(
             responseBody,
           ) ||
           `KudiSMS returned HTTP ${response.status}.`,
@@ -251,53 +261,30 @@ export async function sendSms({
       };
     }
 
-    /*
-     * Some providers return HTTP 200 while placing
-     * an error inside the response body.
-     */
     if (
-      typeof responseBody === 'object' &&
-      responseBody !== null
+      providerRejected(
+        responseBody,
+      )
     ) {
-      const body =
-        responseBody as Record<
-          string,
-          unknown
-        >;
+      return {
+        success: false,
 
-      const explicitSuccess =
-        body.success;
-
-      const status =
-        typeof body.status === 'string'
-          ? body.status.toLowerCase()
-          : '';
-
-      if (
-        explicitSuccess === false ||
-        status === 'failed' ||
-        status === 'error'
-      ) {
-        return {
-          success: false,
-
-          error:
-            extractProviderError(
-              responseBody,
-            ) ||
-            'KudiSMS rejected the message.',
-
-          providerResponse:
+        error:
+          getProviderMessage(
             responseBody,
-        };
-      }
+          ) ||
+          'KudiSMS rejected the message.',
+
+        providerResponse:
+          responseBody,
+      };
     }
 
     return {
       success: true,
 
       providerMessageId:
-        extractMessageId(
+        getProviderMessageId(
           responseBody,
         ),
 
