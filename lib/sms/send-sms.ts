@@ -27,17 +27,14 @@ function normalizeKudiSmsNumber(
 ): string {
   const digits = rawPhone.replace(/\D/g, '');
 
-  // 08012345678
   if (/^0\d{10}$/.test(digits)) {
     return `234${digits.slice(1)}`;
   }
 
-  // 2348012345678
   if (/^234\d{10}$/.test(digits)) {
     return digits;
   }
 
-  // 8012345678
   if (/^\d{10}$/.test(digits)) {
     return `234${digits}`;
   }
@@ -149,19 +146,18 @@ export async function sendSms({
   phone,
   message,
 }: SendSmsInput): Promise<SmsGatewayResponse> {
-  /*
-   * Local testing only.
-   * Keep false in production.
-   */
-  if (
-    process.env.SMS_DEVELOPMENT_MODE ===
-    'false'
-  ) {
-    console.log(
+  const developmentSmsEnabled =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.SMS_DEVELOPMENT_MODE
+      ?.trim()
+      .toLowerCase() === 'true';
+
+  if (developmentSmsEnabled) {
+    console.info(
       'TASK_MONEY_DEVELOPMENT_SMS',
       {
-        phone,
-        message,
+        phoneLastFour:
+          phone.slice(-4),
       },
     );
 
@@ -171,6 +167,31 @@ export async function sendSms({
         'development-message',
     };
   }
+
+  console.info(
+    'TASK_MONEY_SMS_PROVIDER_MODE',
+    {
+      nodeEnvironment:
+        process.env.NODE_ENV,
+
+      developmentMode:
+        process.env
+          .SMS_DEVELOPMENT_MODE ??
+        'undefined',
+
+      hasApiUrl: Boolean(
+        process.env.KUDISMS_API_URL,
+      ),
+
+      hasApiKey: Boolean(
+        process.env.KUDISMS_API_KEY,
+      ),
+
+      hasSenderId: Boolean(
+        process.env.KUDISMS_SENDER_ID,
+      ),
+    },
+  );
 
   try {
     const apiUrl =
@@ -209,11 +230,13 @@ export async function sendSms({
         headers: {
           'Content-Type':
             'application/x-www-form-urlencoded',
+
           Accept:
             'application/json',
         },
 
-        body: formData.toString(),
+        body:
+          formData.toString(),
 
         cache: 'no-store',
 
@@ -242,6 +265,7 @@ export async function sendSms({
       {
         statusCode:
           response.status,
+
         responseBody,
       },
     );
