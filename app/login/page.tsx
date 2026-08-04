@@ -36,11 +36,33 @@ function getAuthErrorMessage(
   fallback: string,
 ): string {
   if (error instanceof Error) {
-    return error.message || fallback;
+    const message = error.message?.trim();
+
+    if (message && message !== '{}') {
+      return message;
+    }
+
+    return fallback;
   }
 
   if (typeof error === 'string') {
-    return error || fallback;
+    const message = error.trim();
+
+    if (!message || message === '{}') {
+      return fallback;
+    }
+
+    try {
+      const parsed = JSON.parse(message) as unknown;
+
+      if (parsed !== message) {
+        return getAuthErrorMessage(parsed, fallback);
+      }
+    } catch {
+      // The value is plain text, not JSON.
+    }
+
+    return message;
   }
 
   if (
@@ -59,11 +81,12 @@ function getAuthErrorMessage(
     ];
 
     for (const possibleMessage of possibleMessages) {
-      if (
-        typeof possibleMessage === 'string' &&
-        possibleMessage.trim()
-      ) {
-        return possibleMessage;
+      if (typeof possibleMessage === 'string') {
+        const message = possibleMessage.trim();
+
+        if (message && message !== '{}') {
+          return message;
+        }
       }
     }
 

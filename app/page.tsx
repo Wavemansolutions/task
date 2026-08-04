@@ -4,11 +4,10 @@ import {
   FiCheckCircle,
   FiDollarSign,
   FiFileText,
-  FiMenu,
   FiShield,
   FiSmartphone,
   FiUsers,
-  FiWallet,
+  FiCreditCard,
 } from 'react-icons/fi';
 import {
   FaFacebook,
@@ -44,7 +43,7 @@ const steps = [
     title: 'Receive your earnings',
     description:
       'Approved rewards are recorded in your Task Money wallet and can be withdrawn.',
-    icon: FiWallet,
+    icon: FiCreditCard,
   },
 ];
 
@@ -71,7 +70,7 @@ const features = [
     title: 'Wallet management',
     description:
       'View available balance, pending earnings, transaction records and withdrawal requests.',
-    icon: FiWallet,
+    icon: FiCreditCard,
   },
   {
     title: 'Multiple task platforms',
@@ -150,13 +149,6 @@ export default function HomePage() {
               <FiArrowRight />
             </Link>
 
-            <button
-              type="button"
-              aria-label="Open navigation"
-              className="rounded-xl border border-slate-200 p-2.5 md:hidden"
-            >
-              <FiMenu />
-            </button>
           </div>
         </div>
       </header>

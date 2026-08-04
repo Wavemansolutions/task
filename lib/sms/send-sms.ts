@@ -112,6 +112,18 @@ function getProviderMessageId(
 function providerRejected(
   body: unknown,
 ): boolean {
+  if (typeof body === 'string') {
+    const value = body.trim().toLowerCase();
+
+    return (
+      value.includes('error') ||
+      value.includes('failed') ||
+      value.includes('invalid') ||
+      value.includes('missing parameter') ||
+      value.includes('insufficient')
+    );
+  }
+
   if (
     typeof body !== 'object' ||
     body === null
@@ -138,7 +150,8 @@ function providerRejected(
     status === 'error' ||
     status === 'failed' ||
     record.success === false ||
-    Boolean(errorCode)
+    Boolean(errorCode) ||
+    typeof record.error === 'string'
   );
 }
 
