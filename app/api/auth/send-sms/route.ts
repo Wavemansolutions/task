@@ -34,13 +34,13 @@ function getWebhookSecret(): string {
   }
 
   /*
-   * Supabase hook secrets may be shown as:
+   * Supabase may display the hook secret as:
    *
-   * v1,whsec_xxxxxxxxx
+   * v1,whsec_xxxxx
    * or
-   * whsec_xxxxxxxxx
+   * whsec_xxxxx
    *
-   * standardwebhooks expects only the base64 secret part.
+   * standardwebhooks expects only the Base64 secret value.
    */
   const normalizedSecret = rawSecret
     .replace(/^v1,whsec_/, '')
@@ -65,8 +65,26 @@ function formatOtpMessage(
   );
 }
 
-export async function GET() {
+function jsonResponse(
+  body: Record<string, unknown>,
+  status: number,
+) {
   return NextResponse.json(
+    body,
+    {
+      status,
+      headers: {
+        'Content-Type':
+          'application/json; charset=utf-8',
+        'Cache-Control':
+          'no-store',
+      },
+    },
+  );
+}
+
+export async function GET() {
+  return jsonResponse(
     {
       status: 'ok',
       service:
@@ -74,17 +92,50 @@ export async function GET() {
       provider: 'KudiSMS',
       accepts: ['POST'],
     },
-    {
-      status: 200,
-    },
+    200,
   );
 }
 
 export async function POST(
   request: NextRequest,
 ) {
+  const contentType =
+    request.headers.get(
+      'content-type',
+    ) ?? '';
+
+  if (
+    !contentType
+      .toLowerCase()
+      .includes('application/json')
+  ) {
+    return jsonResponse(
+      {
+        error: {
+          http_code: 415,
+          message:
+            'Invalid Content-Type. application/json is required.',
+        },
+      },
+      415,
+    );
+  }
+
   const rawBody =
     await request.text();
+
+  if (!rawBody.trim()) {
+    return jsonResponse(
+      {
+        error: {
+          http_code: 400,
+          message:
+            'The SMS-hook request body is empty.',
+        },
+      },
+      400,
+    );
+  }
 
   try {
     const webhook =
@@ -120,7 +171,7 @@ export async function POST(
       payload.sms?.otp?.trim();
 
     if (!phone) {
-      return NextResponse.json(
+      return jsonResponse(
         {
           error: {
             http_code: 400,
@@ -128,9 +179,7 @@ export async function POST(
               'The hook request did not contain a phone number.',
           },
         },
-        {
-          status: 400,
-        },
+        400,
       );
     }
 
@@ -138,7 +187,7 @@ export async function POST(
       !otp ||
       !/^\d{6,10}$/.test(otp)
     ) {
-      return NextResponse.json(
+      return jsonResponse(
         {
           error: {
             http_code: 400,
@@ -146,9 +195,7 @@ export async function POST(
               'The hook request did not contain a valid OTP.',
           },
         },
-        {
-          status: 400,
-        },
+        400,
       );
     }
 
@@ -166,14 +213,15 @@ export async function POST(
           phoneLastFour:
             phone.slice(-4),
 
-          error: result.error,
+          error:
+            result.error,
 
           providerResponse:
             result.providerResponse,
         },
       );
 
-      return NextResponse.json(
+      return jsonResponse(
         {
           error: {
             http_code: 502,
@@ -182,9 +230,7 @@ export async function POST(
               'The verification SMS could not be sent.',
           },
         },
-        {
-          status: 502,
-        },
+        502,
       );
     }
 
@@ -200,11 +246,9 @@ export async function POST(
       },
     );
 
-    return new NextResponse(
-      null,
-      {
-        status: 200,
-      },
+    return jsonResponse(
+      {},
+      200,
     );
   } catch (error: unknown) {
     const message =
@@ -217,7 +261,7 @@ export async function POST(
       message,
     );
 
-    return NextResponse.json(
+    return jsonResponse(
       {
         error: {
           http_code: 401,
@@ -225,9 +269,7 @@ export async function POST(
             'The SMS hook signature could not be verified.',
         },
       },
-      {
-        status: 401,
-      },
+      401,
     );
   }
 }
